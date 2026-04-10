@@ -1,0 +1,13 @@
+{
+  "name": "bondly-travel-platform",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n frontend,api -c cyan,green \"npm run dev --prefix bondly\" \"npm run dev --prefix api\"",
+    "build": "npm run build --prefix bondly",
+    "lint": "npm run lint --prefix bondly"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

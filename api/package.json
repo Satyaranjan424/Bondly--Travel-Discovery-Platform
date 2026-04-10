@@ -1,0 +1,17 @@
+{
+  "name": "bondly-api",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.4",
+    "dotenv": "^17.2.3",
+    "hono": "^4.10.1",
+    "ioredis": "^5.8.1",
+    "pg": "^8.16.3"
+  }
+}
