@@ -26,7 +26,7 @@ const bootstrap = async () => {
   const sessions = createSessionStore(redisClient);
   const app = new Hono();
 
-  app.use("*", cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", allowHeaders: ["Content-Type", "Authorization"], allowMethods: ["GET", "POST", "PUT", "OPTIONS"], credentials: true }));
+  app.use("*", cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", allowHeaders: ["Content-Type", "Authorization"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], credentials: true }));
 
   app.use("*", async (c, next) => {
     const authHeader = c.req.header("Authorization");
@@ -149,7 +149,30 @@ const bootstrap = async () => {
     const user = c.get("session").user;
     const body = await c.req.json();
 
-    const updated = await store.updateTrip(user.id, tripId, body);
+    const itinerary = Array.isArray(body.itinerary)
+      ? body.itinerary
+          .map((item) => ({
+            day: String(item.day ?? "").trim(),
+            title: String(item.title ?? "").trim(),
+            description: String(item.description ?? "").trim(),
+          }))
+          .filter((item) => item.day && item.title && item.description)
+      : undefined;
+
+    const updated = await store.updateTrip(user.id, tripId, {
+      title: body.title !== undefined ? String(body.title).trim() : undefined,
+      summary: body.summary !== undefined ? String(body.summary).trim() : undefined,
+      coverImage: body.coverImage !== undefined ? String(body.coverImage).trim() : undefined,
+      city: body.city !== undefined ? String(body.city).trim() : undefined,
+      country: body.country !== undefined ? String(body.country).trim() : undefined,
+      travelMonth: body.travelMonth !== undefined ? String(body.travelMonth).trim() : undefined,
+      budget: body.budget !== undefined ? String(body.budget).trim() : undefined,
+      durationDays: body.durationDays !== undefined ? Number(body.durationDays) : undefined,
+      visibility: body.visibility !== undefined ? String(body.visibility).trim() : undefined,
+      tags: body.tags !== undefined ? parseList(body.tags) : undefined,
+      highlights: body.highlights !== undefined ? parseList(body.highlights) : undefined,
+      itinerary,
+    });
 
     if (!updated) {
       return c.json({ error: "Trip not found or unauthorized" }, 404);
