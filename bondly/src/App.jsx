@@ -5,7 +5,7 @@ import { AuthPage } from "./pages/AuthPage.jsx";
 import { DashboardPage } from "./pages/DashboardPage.jsx";
 import { EditTripPage } from "./pages/EditTripPage.jsx";
 import { ExplorePage } from "./pages/ExplorePage.jsx";
-import { HomePage } from "./pages/HomePage.jsx";
+import { HomeSocialPage } from "./pages/HomeSocialPage.jsx";
 import { NotFoundPage } from "./pages/NotFoundPage.jsx";
 import { ProfilePage } from "./pages/ProfilePage.jsx";
 import { PublishTripPage } from "./pages/PublishTripPage.jsx";
@@ -15,7 +15,7 @@ function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route index element={<HomePage />} />
+        <Route index element={<HomeSocialPage />} />
         <Route path="explore" element={<ExplorePage />} />
         <Route path="trips/:tripId" element={<TripDetailsPage />} />
         <Route path="auth" element={<AuthPage />} />
