@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 import { createPasswordHash } from "./security.js";
-import { seedComments, seedPhotos, seedReviews, seedSavedTrips, seedTrips, seedUsers } from "../data/seed.js";
+import { seedComments, seedPhotos, seedReviews, seedSavedTrips, seedStories, seedTripLikes, seedTrips, seedUsers } from "../data/seed.js";
 
 const normalizeUser = (user) => ({
   id: user.id,
@@ -20,6 +20,15 @@ const averageRating = (reviews) => {
   return Number((reviews.reduce((sum, review) => sum + Number(review.rating), 0) / reviews.length).toFixed(1));
 };
 
+const buildActivityItem = ({ id, type, user, message, createdAt, tripId = null }) => ({
+  id,
+  type,
+  user,
+  message,
+  createdAt,
+  tripId,
+});
+
 class MemoryStore {
   constructor() {
     this.users = seedUsers.map((user) => ({
@@ -31,6 +40,8 @@ class MemoryStore {
     this.reviews = [...seedReviews];
     this.photos = [...seedPhotos];
     this.savedTrips = [...seedSavedTrips];
+    this.tripLikes = [...seedTripLikes];
+    this.stories = [...seedStories];
   }
 
   async health() {
@@ -95,6 +106,7 @@ class MemoryStore {
       }))
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const saveCount = this.savedTrips.filter((entry) => entry.tripId === trip.id).length;
+    const likeCount = this.tripLikes.filter((entry) => entry.tripId === trip.id).length;
 
     return {
       ...trip,
@@ -103,8 +115,12 @@ class MemoryStore {
       reviews: tripReviews,
       photos: tripPhotos,
       saveCount,
+      likeCount,
+      commentCount: tripComments.length,
+      reviewCount: tripReviews.length,
       averageRating: averageRating(tripReviews),
       isSaved: currentUserId ? this.savedTrips.some((entry) => entry.tripId === trip.id && entry.userId === currentUserId) : false,
+      isLiked: currentUserId ? this.tripLikes.some((entry) => entry.tripId === trip.id && entry.userId === currentUserId) : false,
     };
   }
 
@@ -208,6 +224,133 @@ class MemoryStore {
     return this.getTripById(tripId, userId);
   }
 
+  async toggleTripLike(userId, tripId) {
+    const index = this.tripLikes.findIndex((entry) => entry.userId === userId && entry.tripId === tripId);
+
+    if (index >= 0) {
+      this.tripLikes.splice(index, 1);
+    } else {
+      this.tripLikes.push({ userId, tripId, createdAt: new Date().toISOString() });
+    }
+
+    return this.getTripById(tripId, userId);
+  }
+
+  async createStory(userId, { imageUrl, placeName = "", body = "" }) {
+    const story = {
+      id: `story-${this.stories.length + 1}`,
+      userId,
+      imageUrl,
+      placeName,
+      body,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.stories.unshift(story);
+    return this.getStories(userId);
+  }
+
+  async getStories(currentUserId = null) {
+    return this.stories
+      .slice()
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .map((story) => ({
+        ...story,
+        user: normalizeUser(this.users.find((user) => user.id === story.userId)),
+        isOwnStory: currentUserId ? story.userId === currentUserId : false,
+      }));
+  }
+
+  async getSavedTrips(userId) {
+    const savedTripIds = this.savedTrips.filter((entry) => entry.userId === userId).map((entry) => entry.tripId);
+    return Promise.all(savedTripIds.map((tripId) => this.getTripById(tripId, userId))).then((items) => items.filter(Boolean));
+  }
+
+  async getMemories(userId) {
+    const ownTrips = this.trips.filter((trip) => trip.authorId === userId);
+    const tripMemories = ownTrips.map((trip) => ({
+      id: `memory-trip-${trip.id}`,
+      imageUrl: trip.coverImage,
+      caption: trip.title,
+      source: "trip",
+      createdAt: trip.createdAt,
+    }));
+    const photoMemories = this.photos
+      .filter((photo) => photo.userId === userId)
+      .map((photo) => ({
+        id: `memory-photo-${photo.id}`,
+        imageUrl: photo.imageUrl,
+        caption: photo.caption || "Trip photo",
+        source: "photo",
+        createdAt: photo.createdAt,
+      }));
+    const storyMemories = this.stories
+      .filter((story) => story.userId === userId)
+      .map((story) => ({
+        id: `memory-story-${story.id}`,
+        imageUrl: story.imageUrl,
+        caption: story.placeName || story.body || "Story",
+        source: "story",
+        createdAt: story.createdAt,
+      }));
+
+    return [...storyMemories, ...photoMemories, ...tripMemories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  async getAllUsers(currentUserId = null) {
+    return this.users
+      .filter((user) => !currentUserId || user.id !== currentUserId)
+      .map((user) => normalizeUser(user));
+  }
+
+  async getActivity() {
+    const items = [
+      ...this.comments.map((comment) =>
+        buildActivityItem({
+          id: `comment-${comment.id}`,
+          type: "comment",
+          user: normalizeUser(this.users.find((user) => user.id === comment.userId)),
+          message: comment.body,
+          createdAt: comment.createdAt,
+          tripId: comment.tripId,
+        })),
+      ...this.reviews.map((review) =>
+        buildActivityItem({
+          id: `review-${review.id}`,
+          type: "review",
+          user: normalizeUser(this.users.find((user) => user.id === review.userId)),
+          message: `${review.rating}/5 • ${review.body}`,
+          createdAt: review.createdAt,
+          tripId: review.tripId,
+        })),
+      ...this.tripLikes.map((like) =>
+        buildActivityItem({
+          id: `like-${like.userId}-${like.tripId}`,
+          type: "like",
+          user: normalizeUser(this.users.find((user) => user.id === like.userId)),
+          message: "liked a trip",
+          createdAt: like.createdAt,
+          tripId: like.tripId,
+        })),
+    ];
+
+    return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 20);
+  }
+
+  async getPublicProfile(userId, currentUserId = null) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      return null;
+    }
+
+    return {
+      user: normalizeUser(user),
+      trips: await this.getUserTrips(userId),
+      stories: await this.getStories(currentUserId).then((items) => items.filter((story) => story.userId === userId)),
+      memories: await this.getMemories(userId),
+    };
+  }
+
   // ADD THIS INSIDE MemoryStore CLASS (before closing bracket)
 
   async updateTrip(userId, tripId, updates) {
@@ -253,6 +396,7 @@ class MemoryStore {
     this.reviews = this.reviews.filter((r) => r.tripId !== tripId);
     this.photos = this.photos.filter((p) => p.tripId !== tripId);
     this.savedTrips = this.savedTrips.filter((s) => s.tripId !== tripId);
+    this.tripLikes = this.tripLikes.filter((l) => l.tripId !== tripId);
 
     return true;
   }
@@ -344,7 +488,7 @@ class PostgresStore {
       createdAt: row.created_at,
     };
     const author = await this.findUserById(trip.authorId);
-    const [comments, reviews, photos, saves] = await Promise.all([
+    const [comments, reviews, photos, saves, likes] = await Promise.all([
       this.pool.query(
         "select c.*, u.id as user_id_ref, u.name, u.email, u.bio, u.location, u.avatar_url, u.created_at as user_created_at from comments c join users u on u.id = c.user_id where c.trip_id = $1 order by c.created_at desc",
         [trip.id],
@@ -358,6 +502,7 @@ class PostgresStore {
         [trip.id],
       ),
       this.pool.query("select user_id from saved_trips where trip_id = $1", [trip.id]),
+      this.pool.query("select user_id from trip_likes where trip_id = $1", [trip.id]),
     ]);
 
     const mapJoinedUser = (rowValue) => ({
@@ -402,8 +547,12 @@ class PostgresStore {
         user: mapJoinedUser(photo),
       })),
       saveCount: saves.rows.length,
+      likeCount: likes.rows.length,
+      commentCount: comments.rows.length,
+      reviewCount: reviewItems.length,
       averageRating: averageRating(reviewItems),
       isSaved: currentUserId ? saves.rows.some((entry) => entry.user_id === currentUserId) : false,
+      isLiked: currentUserId ? likes.rows.some((entry) => entry.user_id === currentUserId) : false,
     };
   }
 
@@ -497,6 +646,140 @@ class PostgresStore {
       caption,
     ]);
     return this.getTripById(tripId, userId);
+  }
+
+  async toggleTripLike(userId, tripId) {
+    const existing = await this.pool.query("select 1 from trip_likes where user_id = $1 and trip_id = $2", [userId, tripId]);
+
+    if (existing.rowCount) {
+      await this.pool.query("delete from trip_likes where user_id = $1 and trip_id = $2", [userId, tripId]);
+    } else {
+      await this.pool.query("insert into trip_likes (user_id, trip_id) values ($1, $2)", [userId, tripId]);
+    }
+
+    return this.getTripById(tripId, userId);
+  }
+
+  async createStory(userId, { imageUrl, placeName = "", body = "" }) {
+    await this.pool.query("insert into stories (user_id, image_url, place_name, body) values ($1, $2, $3, $4)", [userId, imageUrl, placeName, body]);
+    return this.getStories(userId);
+  }
+
+  async getStories(currentUserId = null) {
+    const result = await this.pool.query(
+      `select s.*, u.id as user_id_ref, u.name, u.email, u.bio, u.location, u.avatar_url, u.created_at as user_created_at
+       from stories s
+       join users u on u.id = s.user_id
+       order by s.created_at desc`,
+    );
+
+    return result.rows.map((story) => ({
+      id: story.id,
+      userId: story.user_id,
+      imageUrl: story.image_url,
+      placeName: story.place_name,
+      body: story.body,
+      createdAt: story.created_at,
+      user: {
+        id: story.user_id_ref,
+        name: story.name,
+        email: story.email,
+        bio: story.bio,
+        location: story.location,
+        avatarUrl: story.avatar_url,
+        createdAt: story.user_created_at,
+      },
+      isOwnStory: currentUserId ? story.user_id === currentUserId : false,
+    }));
+  }
+
+  async getSavedTrips(userId) {
+    const result = await this.pool.query(
+      `select t.*
+       from saved_trips s
+       join trips t on t.id = s.trip_id
+       where s.user_id = $1
+       order by s.created_at desc`,
+      [userId],
+    );
+
+    return Promise.all(result.rows.map((row) => this.buildTrip(row, userId)));
+  }
+
+  async getMemories(userId) {
+    const [trips, photos, stories] = await Promise.all([
+      this.pool.query("select id, cover_image, title, created_at from trips where author_id = $1", [userId]),
+      this.pool.query("select id, image_url, caption, created_at from photos where user_id = $1", [userId]),
+      this.pool.query("select id, image_url, place_name, body, created_at from stories where user_id = $1", [userId]),
+    ]);
+
+    return [
+      ...stories.rows.map((story) => ({ id: `memory-story-${story.id}`, imageUrl: story.image_url, caption: story.place_name || story.body || "Story", source: "story", createdAt: story.created_at })),
+      ...photos.rows.map((photo) => ({ id: `memory-photo-${photo.id}`, imageUrl: photo.image_url, caption: photo.caption || "Trip photo", source: "photo", createdAt: photo.created_at })),
+      ...trips.rows.map((trip) => ({ id: `memory-trip-${trip.id}`, imageUrl: trip.cover_image, caption: trip.title, source: "trip", createdAt: trip.created_at })),
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }
+
+  async getAllUsers(currentUserId = null) {
+    const result = await this.pool.query(
+      `select * from users
+       where ($1::uuid is null or id <> $1)
+       order by created_at desc`,
+      [currentUserId],
+    );
+
+    return result.rows.map((row) => normalizeUser(this.mapUser(row)));
+  }
+
+  async getActivity() {
+    const [comments, reviews, likes] = await Promise.all([
+      this.pool.query(
+        `select c.id, c.trip_id, c.body as message, c.created_at, u.*
+         from comments c
+         join users u on u.id = c.user_id`,
+      ),
+      this.pool.query(
+        `select r.id, r.trip_id, concat(r.rating, '/5 • ', r.body) as message, r.created_at, u.*
+         from reviews r
+         join users u on u.id = r.user_id`,
+      ),
+      this.pool.query(
+        `select concat(l.user_id, '-', l.trip_id) as id, l.trip_id, 'liked a trip' as message, l.created_at, u.*
+         from trip_likes l
+         join users u on u.id = l.user_id`,
+      ),
+    ]);
+
+    const mapRows = (rows, type) =>
+      rows.map((row) =>
+        buildActivityItem({
+          id: `${type}-${row.id}`,
+          type,
+          user: normalizeUser(this.mapUser(row)),
+          message: row.message,
+          createdAt: row.created_at,
+          tripId: row.trip_id,
+        }),
+      );
+
+    return [...mapRows(comments.rows, "comment"), ...mapRows(reviews.rows, "review"), ...mapRows(likes.rows, "like")]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 20);
+  }
+
+  async getPublicProfile(userId, currentUserId = null) {
+    const user = await this.findUserById(userId);
+    if (!user) {
+      return null;
+    }
+
+    const [trips, stories, memories] = await Promise.all([
+      this.getUserTrips(userId),
+      this.getStories(currentUserId).then((items) => items.filter((story) => story.userId === userId)),
+      this.getMemories(userId),
+    ]);
+
+    return { user: normalizeUser(user), trips, stories, memories };
   }
 
   // ADD THIS INSIDE PostgresStore CLASS (before closing bracket)

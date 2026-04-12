@@ -1,14 +1,7 @@
-import { rightRailUsers } from "./socialData.js";
+import { Link } from "react-router-dom";
 import { BookmarkPulseIcon, CommentIcon, ProfileCardIcon, StarIcon } from "./SocialIcons.jsx";
 
-const activityFeed = [
-  { name: "Priya Sharma", status: "commented on your Kerala backwater story", time: "12m", kind: "comment" },
-  { name: "Rahul Verma", status: "rated your Ladakh plan 4.9", time: "35m", kind: "rating" },
-  { name: "Ananya Das", status: "updated her profile and followed you", time: "1h", kind: "profile" },
-  { name: "Ishaan Patel", status: "saved your Ahmedabad food trail", time: "2h", kind: "save" },
-];
-
-export function SocialRightRail({ isLightMode }) {
+export function SocialRightRail({ isLightMode, users = [], activity = [] }) {
   const panelClass = isLightMode
     ? "border border-slate-200/80 bg-white/78 text-slate-900 shadow-[0_20px_56px_rgba(15,23,42,0.09)] backdrop-blur-xl"
     : "border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] text-white shadow-[0_24px_70px_rgba(2,6,23,0.34)] backdrop-blur-xl";
@@ -23,8 +16,12 @@ export function SocialRightRail({ isLightMode }) {
         <section className={`rounded-[1.75rem] p-5 ${panelClass}`}>
           <p className={`text-lg font-semibold ${strongText}`}>People</p>
           <div className="mt-4 space-y-2">
-            {rightRailUsers.map((item) => (
-              <button key={item.name} type="button" className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition ${hoverSurface}`}>
+            {users.map((item) => {
+              const Wrapper = item.to ? Link : "button";
+              const wrapperProps = item.to ? { to: item.to } : { type: "button" };
+
+              return (
+                <Wrapper key={item.name} {...wrapperProps} className={`flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left transition ${hoverSurface}`}>
                 <div className="relative">
                   <img src={item.avatar} alt={item.name} className="h-11 w-11 rounded-full object-cover" />
                   {item.active ? <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-[#31a24c]" /> : null}
@@ -33,16 +30,17 @@ export function SocialRightRail({ isLightMode }) {
                   <p className={`truncate font-medium ${strongText}`}>{item.name}</p>
                   <p className={`truncate text-sm ${mutedText}`}>{item.detail}</p>
                 </div>
-              </button>
-            ))}
+                </Wrapper>
+              );
+            })}
           </div>
         </section>
 
         <section className={`rounded-[1.75rem] p-5 ${panelClass}`}>
           <p className={`text-lg font-semibold ${strongText}`}>Activity</p>
           <div className="mt-4 space-y-3">
-            {activityFeed.map((item) => (
-              <article key={`${item.name}-${item.time}`} className={`rounded-2xl p-3 ${softPanelClass}`}>
+            {activity.map((item) => (
+              <article key={item.id} className={`rounded-2xl p-3 ${softPanelClass}`}>
                 <div className="flex items-start gap-3">
                   <div className={`mt-1 grid h-10 w-10 place-items-center rounded-full ${item.kind === "comment" ? "bg-[linear-gradient(135deg,rgba(94,234,212,0.24),rgba(94,234,212,0.08))] text-[var(--aqua)]" : item.kind === "rating" ? "bg-[linear-gradient(135deg,rgba(251,191,36,0.24),rgba(251,191,36,0.08))] text-[var(--gold)]" : item.kind === "profile" ? "bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(139,92,246,0.08))] text-[var(--violet)]" : "bg-[linear-gradient(135deg,rgba(244,114,182,0.24),rgba(244,114,182,0.08))] text-[var(--pink)]"}`}>
                     {item.kind === "comment" ? <CommentIcon /> : item.kind === "rating" ? <StarIcon /> : item.kind === "profile" ? <ProfileCardIcon /> : <BookmarkPulseIcon />}

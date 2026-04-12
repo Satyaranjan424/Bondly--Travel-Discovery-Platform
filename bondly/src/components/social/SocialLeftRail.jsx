@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { leftRailItems } from "./socialData.js";
 
 export function SocialLeftRail({ avatar, displayName, isLightMode }) {
@@ -11,13 +11,13 @@ export function SocialLeftRail({ avatar, displayName, isLightMode }) {
   return (
     <aside className="hidden lg:block">
       <div className="sticky top-24 space-y-3">
-        <div className={`flex items-center gap-3 rounded-3xl p-4 ${panelClass}`}>
+        <Link to="/profile" className={`flex items-center gap-3 rounded-3xl p-4 ${panelClass}`}>
           <img src={avatar} alt={displayName} className="h-14 w-14 rounded-full object-cover ring-2 ring-[var(--aqua)]/30" />
           <div>
             <p className="font-semibold">{displayName}</p>
             <p className={`text-sm ${mutedText}`}>Travel creator profile</p>
           </div>
-        </div>
+        </Link>
 
         <div className={`rounded-[1.75rem] p-3 ${panelClass}`}>
           {leftRailItems.map((item) => {

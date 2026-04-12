@@ -22,10 +22,10 @@ export const leftRailItems = [
   { label: "Explore", to: "/explore", icon: CompassGlyph },
   { label: "Publish", to: "/publish", icon: RailCreateIcon },
   { label: "Dashboard", to: "/dashboard", icon: RailDashboardIcon },
-  { label: "Saved", to: "/dashboard", icon: RailBookmarkIcon },
+  { label: "Saved", to: "/saved", icon: RailBookmarkIcon },
   { label: "Friends", to: "/profile", icon: RailPeopleIcon },
   { label: "Groups", to: "/explore", icon: RailGroupIcon },
-  { label: "Memories", to: "/dashboard", icon: RailClockIcon },
+  { label: "Memories", to: "/memories", icon: RailClockIcon },
 ];
 
 export const rightRailUsers = [

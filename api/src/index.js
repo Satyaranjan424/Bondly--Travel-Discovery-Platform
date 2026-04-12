@@ -90,6 +90,47 @@ const bootstrap = async () => {
     return c.json({ trips });
   });
 
+  app.get("/stories", async (c) => {
+    const stories = await store.getStories(c.get("session")?.user?.id ?? null);
+    return c.json({ stories });
+  });
+
+  app.post("/stories", requireAuth, async (c) => {
+    const body = await c.req.json();
+    const imageUrl = String(body.imageUrl ?? "").trim();
+    const placeName = String(body.placeName ?? "").trim();
+    const message = String(body.body ?? "").trim();
+    if (!imageUrl) return c.json({ error: "Story image is required." }, 400);
+    const stories = await store.createStory(c.get("session").user.id, { imageUrl, placeName, body: message });
+    return c.json({ stories }, 201);
+  });
+
+  app.get("/users", async (c) => {
+    const users = await store.getAllUsers(c.get("session")?.user?.id ?? null);
+    return c.json({ users });
+  });
+
+  app.get("/users/:userId", async (c) => {
+    const profile = await store.getPublicProfile(c.req.param("userId"), c.get("session")?.user?.id ?? null);
+    if (!profile) return c.json({ error: "User not found" }, 404);
+    return c.json(profile);
+  });
+
+  app.get("/social/activity", async (c) => {
+    const activity = await store.getActivity();
+    return c.json({ activity });
+  });
+
+  app.get("/social/saved", requireAuth, async (c) => {
+    const trips = await store.getSavedTrips(c.get("session").user.id);
+    return c.json({ trips });
+  });
+
+  app.get("/social/memories", requireAuth, async (c) => {
+    const memories = await store.getMemories(c.get("session").user.id);
+    return c.json({ memories });
+  });
+
   app.get("/trips/mine", requireAuth, async (c) => c.json({ trips: await store.getUserTrips(c.get("session").user.id) }));
 
   app.get("/trips/:tripId", async (c) => {
@@ -117,6 +158,12 @@ const bootstrap = async () => {
 
   app.post("/trips/:tripId/save", requireAuth, async (c) => {
     const trip = await store.saveTrip(c.get("session").user.id, c.req.param("tripId"));
+    if (!trip) return c.json({ error: "Trip not found" }, 404);
+    return c.json({ trip });
+  });
+
+  app.post("/trips/:tripId/like", requireAuth, async (c) => {
+    const trip = await store.toggleTripLike(c.get("session").user.id, c.req.param("tripId"));
     if (!trip) return c.json({ error: "Trip not found" }, 404);
     return c.json({ trip });
   });

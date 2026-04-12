@@ -1,4 +1,5 @@
 ﻿import { useDeferredValue, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
 import { SectionIntro } from "../components/SectionIntro.jsx";
@@ -7,10 +8,20 @@ import { editorialCollections, quickFilters } from "../lib/content.js";
 
 export function ExplorePage() {
   const { token } = useAuth();
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const deferredSearch = useDeferredValue(search);
   const [trips, setTrips] = useState([]);
   const [status, setStatus] = useState("Loading trips...");
+
+  useEffect(() => {
+    setSearch(searchParams.get("q") ?? "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const next = deferredSearch.trim();
+    setSearchParams(next ? { q: next } : {}, { replace: true });
+  }, [deferredSearch, setSearchParams]);
 
   useEffect(() => {
     const controller = new AbortController();

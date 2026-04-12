@@ -107,3 +107,35 @@ export const seedSavedTrips = [
     createdAt: now,
   },
 ];
+
+export const seedTripLikes = [
+  {
+    userId: "user-maya",
+    tripId: "trip-cape-town",
+    createdAt: now,
+  },
+  {
+    userId: "user-alex",
+    tripId: "trip-kyoto",
+    createdAt: now,
+  },
+];
+
+export const seedStories = [
+  {
+    id: "story-1",
+    userId: "user-maya",
+    imageUrl: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
+    placeName: "Goa",
+    body: "Sunset colors and sea breeze.",
+    createdAt: now,
+  },
+  {
+    id: "story-2",
+    userId: "user-alex",
+    imageUrl: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=900&q=80",
+    placeName: "Kyoto",
+    body: "Temple mornings.",
+    createdAt: now,
+  },
+];

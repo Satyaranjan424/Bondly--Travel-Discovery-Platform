@@ -1,8 +1,24 @@
-import { NavLink } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { headerNavItems } from "./socialData.js";
 import { LogoutGlyph, MoonGlyph, ProfileGlyph, SearchIcon, SettingsGlyph, ShieldGlyph, SunGlyph } from "./SocialIcons.jsx";
 
 export function SocialHeader({ homeMode, onToggleMode, isAuthenticated, user, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    setQuery(params.get("q") ?? "");
+  }, [location.search]);
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const trimmed = query.trim();
+    navigate(trimmed ? `/explore?q=${encodeURIComponent(trimmed)}` : "/explore");
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[rgba(7,18,34,0.8)] shadow-[0_18px_54px_rgba(2,6,23,0.46)] backdrop-blur-xl">
       <div className="mx-auto grid max-w-[96rem] grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(16rem,18rem)_1fr_auto] lg:px-6">
@@ -10,10 +26,15 @@ export function SocialHeader({ homeMode, onToggleMode, isAuthenticated, user, on
           <NavLink to="/" className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#5eead4,#8b5cf6)] text-xl font-black text-slate-950 shadow-[0_14px_34px_rgba(94,234,212,0.28)]">
             B
           </NavLink>
-          <div className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/6 px-4 py-3 text-sm text-white/55 md:flex">
+          <form onSubmit={handleSubmit} className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white/55 md:flex">
             <SearchIcon />
-            <span>Search Bondly</span>
-          </div>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search Bondly"
+              className="w-56 bg-transparent py-1 text-white outline-none placeholder:text-white/40"
+            />
+          </form>
         </div>
 
         <nav className="flex items-center justify-center gap-1 sm:gap-2">

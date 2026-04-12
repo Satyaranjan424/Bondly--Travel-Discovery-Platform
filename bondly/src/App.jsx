@@ -9,7 +9,10 @@ import { HomeSocialPage } from "./pages/HomeSocialPage.jsx";
 import { NotFoundPage } from "./pages/NotFoundPage.jsx";
 import { ProfilePage } from "./pages/ProfilePage.jsx";
 import { PublishTripPage } from "./pages/PublishTripPage.jsx";
+import { SavedPage } from "./pages/SavedPage.jsx";
+import { MemoriesPage } from "./pages/MemoriesPage.jsx";
 import { TripDetailsPage } from "./pages/TripDetailsPage.jsx";
+import { UserProfilePage } from "./pages/UserProfilePage.jsx";
 
 function App() {
   return (
@@ -18,10 +21,13 @@ function App() {
         <Route index element={<HomeSocialPage />} />
         <Route path="explore" element={<ExplorePage />} />
         <Route path="trips/:tripId" element={<TripDetailsPage />} />
+        <Route path="users/:userId" element={<UserProfilePage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="publish" element={<ProtectedRoute><PublishTripPage /></ProtectedRoute>} />
+        <Route path="saved" element={<ProtectedRoute><SavedPage /></ProtectedRoute>} />
+        <Route path="memories" element={<ProtectedRoute><MemoriesPage /></ProtectedRoute>} />
         <Route path="trips/:tripId/edit" element={<ProtectedRoute><EditTripPage /></ProtectedRoute>} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
