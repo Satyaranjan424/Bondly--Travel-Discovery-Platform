@@ -6,7 +6,7 @@ import {
   RailClockIcon,
   RailCreateIcon,
   RailDashboardIcon,
-  RailGroupIcon,
+  RailMessageIcon,
   RailPeopleIcon,
 } from "./SocialIcons.jsx";
 
@@ -24,7 +24,7 @@ export const leftRailItems = [
   { label: "Dashboard", to: "/dashboard", icon: RailDashboardIcon },
   { label: "Saved", to: "/saved", icon: RailBookmarkIcon },
   { label: "Friends", to: "/profile", icon: RailPeopleIcon },
-  { label: "Groups", to: "/explore", icon: RailGroupIcon },
+  { label: "Messages", to: "/messages", icon: RailMessageIcon },
   { label: "Memories", to: "/memories", icon: RailClockIcon },
 ];
 

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 
 export function DashboardPage() {
   const { token, user } = useAuth();
+  const { showToast } = useToast();
   const [trips, setTrips] = useState([]);
   const [status, setStatus] = useState("Loading your trips...");
 
@@ -26,6 +28,7 @@ export function DashboardPage() {
       await api.deleteTrip(token, tripId);
       setTrips((current) => current.filter((trip) => trip.id !== tripId));
       setStatus("Trip deleted.");
+      showToast({ type: "delete", message: "The trip was removed from your dashboard." });
     } catch (error) {
       setStatus(error.message);
     }

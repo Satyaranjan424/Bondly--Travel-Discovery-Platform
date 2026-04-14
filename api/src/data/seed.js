@@ -139,3 +139,21 @@ export const seedStories = [
     createdAt: now,
   },
 ];
+
+export const seedFollows = [
+  {
+    followerId: "user-maya",
+    followingId: "user-alex",
+    createdAt: now,
+  },
+];
+
+export const seedMessages = [
+  {
+    id: "message-1",
+    senderId: "user-maya",
+    recipientId: "user-alex",
+    body: "Your Cape Town route looks amazing. Want to exchange stay ideas?",
+    createdAt: now,
+  },
+];

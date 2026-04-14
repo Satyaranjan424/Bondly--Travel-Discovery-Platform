@@ -70,6 +70,10 @@ export function RailGroupIcon() {
   return <Icon><circle cx="9" cy="9" r="2.5" /><circle cx="16.5" cy="10" r="2" /><path d="M4.5 18a5 5 0 0 1 9 0" /><path d="M14 18a4 4 0 0 1 6 0" /></Icon>;
 }
 
+export function RailMessageIcon() {
+  return <Icon><path d="M4.5 7.5A2.5 2.5 0 0 1 7 5h10a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 16H9l-4.5 3v-11.5Z" /><path d="M8.5 9.5h7M8.5 12.5h4.5" /></Icon>;
+}
+
 export function RailClockIcon() {
   return <Icon><circle cx="12" cy="12" r="8" /><path d="M12 8v4l2.5 2.5" /></Icon>;
 }
@@ -94,16 +98,28 @@ export function DotsIcon() {
   return <Icon className="h-5 w-5"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon>;
 }
 
-export function HeartIcon() {
-  return <Icon className="h-5 w-5"><path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.65-7 10-7 10Z" /></Icon>;
+export function HeartIcon({ className = "h-5 w-5" }) {
+  return <Icon className={className}><path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.65-7 10-7 10Z" /></Icon>;
 }
 
-export function CommentIcon() {
-  return <Icon className="h-5 w-5"><path d="M5 18.5V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 2.5Z" /></Icon>;
+export function FilledHeartIcon({ className = "h-5 w-5" }) {
+  return <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M12 20s-7-4.35-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.65-7 10-7 10Z" /></svg>;
+}
+
+export function CommentIcon({ className = "h-5 w-5" }) {
+  return <Icon className={className}><path d="M5 18.5V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9l-4 2.5Z" /></Icon>;
 }
 
 export function ShareIcon() {
   return <Icon className="h-5 w-5"><path d="m14 5 5 5-5 5" /><path d="M19 10H9a4 4 0 0 0-4 4v5" /></Icon>;
+}
+
+export function BookmarkIcon({ filled = false, className = "h-5 w-5" }) {
+  if (filled) {
+    return <svg viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M7 5h10v15l-5-3-5 3Z" /></svg>;
+  }
+
+  return <Icon className={className}><path d="M7 5h10v15l-5-3-5 3Z" /></Icon>;
 }
 
 export function StarIcon() {

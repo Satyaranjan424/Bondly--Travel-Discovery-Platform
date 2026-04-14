@@ -46,8 +46,10 @@ export function AppLayout() {
 
       <footer className="border-t border-white/10 bg-[#081321]">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-sm text-white/50 sm:px-8 lg:px-10 md:flex-row md:items-center md:justify-between">
-          <p>Bondly pairs cinematic discovery flows with a practical creator dashboard.</p>
-          <p>React, Tailwind, Hono, NeonDB, Redis</p>
+          <div>
+            <p className="font-medium text-white/72">Bondly pairs cinematic discovery flows with a practical creator dashboard.</p>
+          </div>
+          <p className="mt-1">Copyright (c) {new Date().getFullYear()} Bondly. All rights reserved.</p>
         </div>
       </footer>
     </div>

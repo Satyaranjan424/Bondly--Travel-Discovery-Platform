@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 
 const inputClass = "w-full rounded-[1.4rem] border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 text-white outline-none placeholder:text-white/30";
 
@@ -8,6 +9,7 @@ export function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, signup } = useAuth();
+  const { showToast } = useToast();
   const [mode, setMode] = useState("login");
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [status, setStatus] = useState("");
@@ -19,8 +21,10 @@ export function AuthPage() {
       setStatus("Working...");
       if (mode === "login") {
         await login({ email: form.email, password: form.password });
+        showToast({ type: "login", message: "Your Bondly session is live and ready." });
       } else {
         await signup(form);
+        showToast({ type: "signup", message: "Your traveler profile is ready to explore and publish." });
       }
       navigate(destination, { replace: true });
     } catch (error) {

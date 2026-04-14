@@ -1,4 +1,6 @@
-﻿const inputClass = "w-full rounded-[1.4rem] border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 text-white outline-none placeholder:text-white/30";
+import { readFileAsDataUrl } from "../lib/fileUploads.js";
+
+const inputClass = "w-full rounded-[1.4rem] border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 text-white outline-none placeholder:text-white/30";
 
 const budgetOptions = [
   { value: "$", label: "$ • Budget under $800" },
@@ -9,13 +11,26 @@ const budgetOptions = [
 
 export function TripForm({ value, onChange, onSubmit, submitLabel, isSubmitting = false }) {
   const updateField = (field, nextValue) => onChange((current) => ({ ...current, [field]: nextValue }));
+  const previewImage = value.coverImage || "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80";
+
+  async function handleCoverImageChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const imageUrl = await readFileAsDataUrl(file);
+    updateField("coverImage", imageUrl);
+  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <input value={value.title} onChange={(event) => updateField("title", event.target.value)} placeholder="Trip title" className={inputClass} />
-        <input value={value.coverImage} onChange={(event) => updateField("coverImage", event.target.value)} placeholder="Cover image URL" className={inputClass} />
+        <label className={`${inputClass} flex cursor-pointer items-center justify-between gap-3`}>
+          <span className="truncate text-white/70">{value.coverImage ? "Change cover image" : "Choose cover image from your device"}</span>
+          <input type="file" accept="image/*" onChange={(event) => void handleCoverImageChange(event)} className="hidden" />
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-950">Browse</span>
+        </label>
       </div>
+      <img src={previewImage} alt="Trip cover preview" className="max-h-72 w-full rounded-[1.8rem] border border-white/10 object-cover" />
       <textarea value={value.summary} onChange={(event) => updateField("summary", event.target.value)} placeholder="Write the trip story" rows="4" className={inputClass} />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <input value={value.city} onChange={(event) => updateField("city", event.target.value)} placeholder="City" className={inputClass} />

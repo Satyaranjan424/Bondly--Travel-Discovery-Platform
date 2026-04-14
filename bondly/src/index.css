@@ -59,6 +59,7 @@ body::before {
 }
 
 button, input, select, textarea { font: inherit; }
+button, a, summary, select, input[type="file"], input[type="file"]::file-selector-button { cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 img { display: block; max-width: 100%; }
 #root { min-height: 100vh; isolation: isolate; }

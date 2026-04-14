@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { BookmarkPulseIcon, CommentIcon, ProfileCardIcon, StarIcon } from "./SocialIcons.jsx";
+import { BookmarkPulseIcon, CommentIcon, HeartIcon, ProfileCardIcon, StarIcon } from "./SocialIcons.jsx";
 
 export function SocialRightRail({ isLightMode, users = [], activity = [] }) {
   const panelClass = isLightMode
@@ -12,7 +12,7 @@ export function SocialRightRail({ isLightMode, users = [], activity = [] }) {
 
   return (
     <aside className="hidden lg:block">
-      <div className="sticky top-24 space-y-4">
+      <div className="sticky top-24 max-h-[calc(100vh-7rem)] space-y-4 overflow-y-auto pr-1">
         <section className={`rounded-[1.75rem] p-5 ${panelClass}`}>
           <p className={`text-lg font-semibold ${strongText}`}>People</p>
           <div className="mt-4 space-y-2">
@@ -42,8 +42,8 @@ export function SocialRightRail({ isLightMode, users = [], activity = [] }) {
             {activity.map((item) => (
               <article key={item.id} className={`rounded-2xl p-3 ${softPanelClass}`}>
                 <div className="flex items-start gap-3">
-                  <div className={`mt-1 grid h-10 w-10 place-items-center rounded-full ${item.kind === "comment" ? "bg-[linear-gradient(135deg,rgba(94,234,212,0.24),rgba(94,234,212,0.08))] text-[var(--aqua)]" : item.kind === "rating" ? "bg-[linear-gradient(135deg,rgba(251,191,36,0.24),rgba(251,191,36,0.08))] text-[var(--gold)]" : item.kind === "profile" ? "bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(139,92,246,0.08))] text-[var(--violet)]" : "bg-[linear-gradient(135deg,rgba(244,114,182,0.24),rgba(244,114,182,0.08))] text-[var(--pink)]"}`}>
-                    {item.kind === "comment" ? <CommentIcon /> : item.kind === "rating" ? <StarIcon /> : item.kind === "profile" ? <ProfileCardIcon /> : <BookmarkPulseIcon />}
+                  <div className={`mt-1 grid h-10 w-10 place-items-center rounded-full ${item.kind === "comment" ? "bg-[linear-gradient(135deg,rgba(94,234,212,0.24),rgba(94,234,212,0.08))] text-[var(--aqua)]" : item.kind === "rating" ? "bg-[linear-gradient(135deg,rgba(251,191,36,0.24),rgba(251,191,36,0.08))] text-[var(--gold)]" : item.kind === "profile" ? "bg-[linear-gradient(135deg,rgba(139,92,246,0.24),rgba(139,92,246,0.08))] text-[var(--violet)]" : item.kind === "like" ? "bg-[linear-gradient(135deg,rgba(251,113,133,0.24),rgba(251,113,133,0.08))] text-[var(--rose)]" : "bg-[linear-gradient(135deg,rgba(244,114,182,0.24),rgba(244,114,182,0.08))] text-[var(--pink)]"}`}>
+                    {item.kind === "comment" ? <CommentIcon /> : item.kind === "rating" ? <StarIcon /> : item.kind === "profile" ? <ProfileCardIcon /> : item.kind === "like" ? <HeartIcon /> : <BookmarkPulseIcon />}
                   </div>
                   <div>
                     <p className={`text-sm ${mutedText}`}>

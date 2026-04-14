@@ -1,81 +1,129 @@
 ﻿import { Link, useNavigate, useOutletContext } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { TripCard } from "../components/TripCard.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 import { SocialLeftRail } from "../components/social/SocialLeftRail.jsx";
 import { SocialRightRail } from "../components/social/SocialRightRail.jsx";
-import { CommentIcon, DotsIcon, HeartIcon, MapPinIcon, PhotoIcon, PlusSmallIcon, ShareIcon, VideoIcon } from "../components/social/SocialIcons.jsx";
+import { BookmarkIcon, CommentIcon, DotsIcon, FilledHeartIcon, HeartIcon, MapPinIcon, PhotoIcon, PlusSmallIcon, VideoIcon } from "../components/social/SocialIcons.jsx";
+import { readFileAsDataUrl } from "../lib/fileUploads.js";
+
+const homeFeedCacheTtlMs = 10 * 60 * 1000;
 
 export function HomeSocialPage() {
   const navigate = useNavigate();
   const { token, user, isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const { homeMode = "dark" } = useOutletContext() || {};
+  const menuRef = useRef(null);
+  const cachedFeed = readHomeFeedCache(token);
 
-  const [featuredTrips, setFeaturedTrips] = useState([]);
-  const [stories, setStories] = useState([]);
-  const [people, setPeople] = useState([]);
-  const [activity, setActivity] = useState([]);
+  const [featuredTrips, setFeaturedTrips] = useState(() => cachedFeed.featuredTrips || []);
+  const [stories, setStories] = useState(() => cachedFeed.stories || []);
+  const [people, setPeople] = useState(() => cachedFeed.people || []);
+  const [activity, setActivity] = useState(() => cachedFeed.activity || []);
   const [notice, setNotice] = useState("");
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !hasCachedHomeFeed(cachedFeed));
 
   const [activeCommentTripId, setActiveCommentTripId] = useState("");
   const [commentBody, setCommentBody] = useState("");
+  const [openMenuTripId, setOpenMenuTripId] = useState("");
   const [storyModal, setStoryModal] = useState({ open: false, mode: "create", story: null });
   const [storyForm, setStoryForm] = useState({ imageUrl: "", placeName: "", body: "" });
+  const [pendingTripActions, setPendingTripActions] = useState({});
+
+  useEffect(() => {
+    const nextCachedFeed = readHomeFeedCache(token);
+    setFeaturedTrips(nextCachedFeed.featuredTrips || []);
+    setStories(nextCachedFeed.stories || []);
+    setPeople(nextCachedFeed.people || []);
+    setActivity(nextCachedFeed.activity || []);
+    setIsLoading(!hasCachedHomeFeed(nextCachedFeed));
+  }, [token]);
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
+    const cachedSnapshot = readHomeFeedCache(token);
+    setIsLoading((current) => current && !hasCachedHomeFeed(cachedSnapshot));
+
+    api
+      .getExploreTrips({ token, signal: controller.signal, limit: 12, view: "feed" })
+      .then((tripResult) => {
+        const nextTrips = tripResult.trips;
+        const latestFeed = readHomeFeedCache(token);
+        setFeaturedTrips(nextTrips);
+        writeHomeFeedCache(token, {
+          featuredTrips: nextTrips,
+          stories: latestFeed.stories || cachedSnapshot.stories || [],
+          people: latestFeed.people || cachedSnapshot.people || [],
+          activity: latestFeed.activity || cachedSnapshot.activity || [],
+        });
+      })
+      .catch(() => {
+        // Keep cached trips on screen if the live refresh fails.
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
 
     Promise.allSettled([
-      api.getExploreTrips({ token, signal: controller.signal }),
-      api.getStories({ token, signal: controller.signal }),
-      api.getUsers({ token, signal: controller.signal }),
-      api.getActivity({ token, signal: controller.signal }),
+      api.getStories({ token, signal: controller.signal, limit: 14 }),
+      api.getUsers({ token, signal: controller.signal, limit: 8 }),
+      api.getActivity({ token, signal: controller.signal, limit: 10 }),
     ]).then((results) => {
-      const [tripResult, storyResult, userResult, activityResult] = results;
-
-      if (tripResult.status === "fulfilled") {
-        setFeaturedTrips(tripResult.value.trips.slice(0, 12));
-      } else {
-        setFeaturedTrips([]);
-      }
+      const [storyResult, userResult, activityResult] = results;
+      const nextFeed = {
+        featuredTrips: readHomeFeedCache(token).featuredTrips || cachedSnapshot.featuredTrips || [],
+        stories: cachedSnapshot.stories || [],
+        people: cachedSnapshot.people || [],
+        activity: cachedSnapshot.activity || [],
+      };
 
       if (storyResult.status === "fulfilled") {
-        setStories(storyResult.value.stories);
+        nextFeed.stories = storyResult.value.stories;
+        setStories(nextFeed.stories);
       }
 
       if (userResult.status === "fulfilled") {
-        setPeople(
-          userResult.value.users.map((item) => ({
-            to: `/users/${item.id}`,
-            name: item.name,
-            detail: item.location || item.bio || "Bondly traveler",
-            active: true,
-            avatar: item.avatarUrl || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=320&q=80",
-          })),
-        );
+        nextFeed.people = userResult.value.users.map((item) => ({
+          to: `/users/${item.id}`,
+          name: item.name,
+          detail: item.location || item.bio || "Bondly traveler",
+          active: true,
+          avatar: item.avatarUrl || "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=320&q=80",
+        }));
+        setPeople(nextFeed.people);
       }
 
       if (activityResult.status === "fulfilled") {
-        setActivity(
-          activityResult.value.activity.map((item) => ({
-            id: item.id,
-            kind: item.type === "review" ? "rating" : item.type,
-            name: item.user?.name || "Traveler",
-            status: item.message,
-            time: formatRelativeTime(item.createdAt),
-          })),
-        );
+        nextFeed.activity = activityResult.value.activity.map((item) => ({
+          id: item.id,
+          kind: item.type === "review" ? "rating" : item.type,
+          name: item.user?.name || "Traveler",
+          status: item.message,
+          time: formatRelativeTime(item.createdAt),
+        }));
+        setActivity(nextFeed.activity);
       }
 
-      setIsLoading(false);
+      writeHomeFeedCache(token, nextFeed);
     });
 
     return () => controller.abort();
   }, [token]);
+
+  useEffect(() => {
+    function handlePointerDown(event) {
+      if (!menuRef.current?.contains(event.target)) {
+        setOpenMenuTripId("");
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, []);
 
   const trips = featuredTrips;
 
@@ -95,6 +143,7 @@ export function HomeSocialPage() {
   const softPanelClass = isLightMode ? "border border-slate-200/70 bg-slate-50/90" : "border border-white/8 bg-[#091321]/78";
   const mutedText = isLightMode ? "text-slate-500" : "text-white/58";
   const strongText = isLightMode ? "text-slate-900" : "text-white";
+  const actionHoverClass = isLightMode ? "hover:bg-slate-100" : "hover:bg-white/8";
 
   function requireAuth() {
     if (isAuthenticated) return true;
@@ -106,16 +155,62 @@ export function HomeSocialPage() {
     setFeaturedTrips((current) => current.map((trip) => (trip.id === nextTrip.id ? nextTrip : trip)));
   }
 
+  function setTripPending(tripId, action, value) {
+    setPendingTripActions((current) => ({
+      ...current,
+      [tripId]: { ...(current[tripId] || {}), [action]: value },
+    }));
+  }
+
+  function updateTripOptimistically(tripId, recipe) {
+    let previousTrip = null;
+    setFeaturedTrips((current) =>
+      current.map((trip) => {
+        if (trip.id !== tripId) return trip;
+        previousTrip = trip;
+        return recipe(trip);
+      }),
+    );
+    return previousTrip;
+  }
+
   async function handleLike(tripId) {
     if (!requireAuth()) return;
-    const response = await api.likeTrip(token, tripId);
-    updateTripInFeed(response.trip);
+    if (pendingTripActions[tripId]?.like) return;
+    const previousTrip = updateTripOptimistically(tripId, (trip) => ({
+      ...trip,
+      isLiked: !trip.isLiked,
+      likeCount: Math.max(0, (trip.likeCount ?? 0) + (trip.isLiked ? -1 : 1)),
+    }));
+    setTripPending(tripId, "like", true);
+    try {
+      const response = await api.likeTrip(token, tripId);
+      updateTripInFeed(response.trip);
+    } catch {
+      if (previousTrip) updateTripInFeed(previousTrip);
+    } finally {
+      setTripPending(tripId, "like", false);
+    }
   }
 
   async function handleSave(tripId) {
     if (!requireAuth()) return;
-    const response = await api.saveTrip(token, tripId);
-    updateTripInFeed(response.trip);
+    if (pendingTripActions[tripId]?.save) return;
+    const previousTrip = updateTripOptimistically(tripId, (trip) => ({
+      ...trip,
+      isSaved: !trip.isSaved,
+      saveCount: Math.max(0, (trip.saveCount ?? 0) + (trip.isSaved ? -1 : 1)),
+    }));
+    setTripPending(tripId, "save", true);
+    try {
+      const response = await api.saveTrip(token, tripId);
+      updateTripInFeed(response.trip);
+      showToast({ type: "save", message: response.trip.isSaved ? "Post saved to your collection." : "Post removed from your saved collection." });
+    } catch {
+      if (previousTrip) updateTripInFeed(previousTrip);
+    } finally {
+      setTripPending(tripId, "save", false);
+    }
   }
 
   async function handleCommentSubmit(tripId) {
@@ -124,12 +219,15 @@ export function HomeSocialPage() {
     updateTripInFeed(response.trip);
     setCommentBody("");
     setActiveCommentTripId("");
+    showToast({ type: "submit", message: "Your comment is now visible in the thread." });
   }
 
   async function handleDeleteTrip(tripId) {
     if (!requireAuth()) return;
     await api.deleteTrip(token, tripId);
     setFeaturedTrips((current) => current.filter((trip) => trip.id !== tripId));
+    setOpenMenuTripId("");
+    showToast({ type: "delete", message: "The post was removed from the feed." });
   }
 
   async function handleCreateStory() {
@@ -139,25 +237,30 @@ export function HomeSocialPage() {
     setStoryModal({ open: false, mode: "create", story: null });
     setStoryForm({ imageUrl: "", placeName: "", body: "" });
     setNotice("Story shared.");
+    showToast({ type: "submit", message: "Your story is live at the top of the feed." });
   }
 
   async function handleStoryFileChange(event) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setStoryForm((current) => ({ ...current, imageUrl: String(reader.result || "") }));
-    reader.readAsDataURL(file);
+    const imageUrl = await readFileAsDataUrl(file);
+    setStoryForm((current) => ({ ...current, imageUrl }));
   }
 
   return (
     <main className={`relative z-10 transition-colors duration-300 ${shellClass}`}>
-      {!isLoading && (
-        <section className="mx-auto max-w-[96rem] px-3 py-5 sm:px-4 lg:px-6 lg:py-6">
+      <section className="mx-auto max-w-[96rem] px-3 py-5 sm:px-4 lg:px-6 lg:py-6">
         <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)_18rem] xl:grid-cols-[18rem_minmax(0,1fr)_20rem]">
           <SocialLeftRail avatar={avatar} displayName={displayName} isLightMode={isLightMode} />
 
           <div className="min-w-0">
             <div className="mx-auto max-w-[42rem] space-y-5">
+              {isLoading ? (
+                <section className={`rounded-[1.75rem] px-4 py-3 text-sm ${panelClass}`}>
+                  Loading your travel feed...
+                </section>
+              ) : null}
+
               <section className={`rounded-[1.75rem] p-4 ${panelClass}`}>
                 <div className="flex items-center gap-3">
                   <img src={avatar} alt={displayName} className="h-11 w-11 rounded-full object-cover" />
@@ -170,9 +273,9 @@ export function HomeSocialPage() {
                   </button>
                 </div>
                 <div className={`mt-4 grid grid-cols-3 gap-2 border-t pt-3 text-sm font-medium ${isLightMode ? "border-slate-200 text-slate-600" : "border-white/10 text-white/70"}`}>
-                  <ActionPill tone="text-[#f3425f]" icon={<VideoIcon />}>Live</ActionPill>
-                  <ActionPill tone="text-[#45bd62]" icon={<PhotoIcon />}>Photo</ActionPill>
-                  <ActionPill tone="text-[#f7b928]" icon={<MapPinIcon />}>Plan</ActionPill>
+                  <ActionPill tone="text-[#f3425f]" icon={<VideoIcon />} onClick={() => window.open("https://weather.com/", "_blank", "noopener,noreferrer")}>Weather</ActionPill>
+                  <ActionPill tone="text-[#45bd62]" icon={<PhotoIcon />} onClick={() => navigate("/memories")}>Photo</ActionPill>
+                  <ActionPill tone="text-[#f7b928]" icon={<MapPinIcon />} onClick={() => window.open("https://maps.google.com/", "_blank", "noopener,noreferrer")}>Plan</ActionPill>
                 </div>
               </section>
 
@@ -207,9 +310,15 @@ export function HomeSocialPage() {
               {notice ? <p className={`text-sm ${mutedText}`}>{notice}</p> : null}
 
               <section className="space-y-5">
+                {!trips.length && !isLoading ? (
+                  <div className={`rounded-[1.75rem] px-5 py-10 text-center text-sm ${panelClass}`}>
+                    Feed content is taking a little longer than usual to sync. Try exploring a trip or refresh again in a moment.
+                  </div>
+                ) : null}
+
                 {trips.map((trip) => (
                   <div key={trip.id} className="space-y-3">
-                    <div className={`flex items-center justify-between rounded-[1.5rem] px-4 py-3 ${panelClass}`}>
+                    <div className={`relative z-20 flex items-center justify-between rounded-[1.5rem] px-4 py-3 ${panelClass}`}>
                       <Link to={trip.author?.id ? `/users/${trip.author.id}` : "/profile"} className="flex items-center gap-3">
                         <img src={trip.author?.avatarUrl || avatar} alt={trip.author?.name || "Traveler"} className="h-11 w-11 rounded-full object-cover" />
                         <div>
@@ -217,33 +326,50 @@ export function HomeSocialPage() {
                           <p className={`text-sm ${mutedText}`}>{trip.city}, {trip.country} • curated trip story</p>
                         </div>
                       </Link>
-                      <details className="relative">
-                        <summary className={`list-none rounded-full px-3 py-2 transition ${isLightMode ? "text-slate-400 hover:bg-slate-100 hover:text-slate-700" : "text-white/45 hover:bg-white/8 hover:text-white"}`}>
+                      <div ref={openMenuTripId === trip.id ? menuRef : null} className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setOpenMenuTripId((current) => (current === trip.id ? "" : trip.id))}
+                          className={`rounded-full px-3 py-2 transition ${isLightMode ? "text-slate-400 hover:bg-slate-100 hover:text-slate-700" : "text-white/45 hover:bg-white/8 hover:text-white"}`}
+                        >
                           <DotsIcon />
-                        </summary>
-                        <div className={`absolute right-0 top-12 z-20 w-36 rounded-2xl p-2 ${panelClass}`}>
-                          <Link to={`/trips/${trip.id}`} className={`block rounded-xl px-3 py-2 text-sm ${isLightMode ? "hover:bg-slate-100" : "hover:bg-white/8"}`}>View</Link>
-                          {trip.author?.id === user?.id ? <Link to={`/trips/${trip.id}/edit`} className={`block rounded-xl px-3 py-2 text-sm ${isLightMode ? "hover:bg-slate-100" : "hover:bg-white/8"}`}>Edit</Link> : null}
-                          {trip.author?.id === user?.id ? <button type="button" onClick={() => void handleDeleteTrip(trip.id)} className={`block w-full rounded-xl px-3 py-2 text-left text-sm ${isLightMode ? "hover:bg-slate-100" : "hover:bg-white/8"}`}>Delete</button> : null}
-                        </div>
-                      </details>
+                        </button>
+                        {openMenuTripId === trip.id ? (
+                          <div className={`absolute right-0 top-12 z-50 w-36 rounded-2xl p-2 ${panelClass}`}>
+                            <Link to={`/trips/${trip.id}`} onClick={() => setOpenMenuTripId("")} className={`block rounded-xl px-3 py-2 text-sm ${actionHoverClass}`}>View</Link>
+                            {trip.author?.id === user?.id ? <Link to={`/trips/${trip.id}/edit`} onClick={() => setOpenMenuTripId("")} className={`block rounded-xl px-3 py-2 text-sm ${actionHoverClass}`}>Edit</Link> : null}
+                            {trip.author?.id === user?.id ? <button type="button" onClick={() => void handleDeleteTrip(trip.id)} className={`block w-full rounded-xl px-3 py-2 text-left text-sm ${actionHoverClass}`}>Delete</button> : null}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
 
                     <TripCard trip={trip} />
 
                     <div className={`grid grid-cols-3 gap-2 rounded-[1.5rem] p-2 ${panelClass}`}>
-                      <button type="button" onClick={() => void handleLike(trip.id)} className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium text-inherit transition hover:bg-white/8">
-                        <HeartIcon />
-                        Like {trip.likeCount ?? 0}
-                      </button>
-                      <button type="button" onClick={() => setActiveCommentTripId((current) => current === trip.id ? "" : trip.id)} className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium text-inherit transition hover:bg-white/8">
-                        <CommentIcon />
-                        Comment {trip.commentCount ?? trip.comments?.length ?? 0}
-                      </button>
-                      <button type="button" onClick={() => void handleSave(trip.id)} className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-medium text-inherit transition hover:bg-white/8">
-                        <ShareIcon />
-                        Save {trip.saveCount ?? 0}
-                      </button>
+                      <SocialActionButton
+                        isActive={Boolean(trip.isLiked)}
+                        isDisabled={Boolean(pendingTripActions[trip.id]?.like)}
+                        label="Like"
+                        onClick={() => void handleLike(trip.id)}
+                        activeClass="text-rose-400"
+                        icon={trip.isLiked ? <FilledHeartIcon /> : <HeartIcon />}
+                      />
+                      <SocialActionButton
+                        isActive={activeCommentTripId === trip.id}
+                        label="Comment"
+                        onClick={() => setActiveCommentTripId((current) => current === trip.id ? "" : trip.id)}
+                        activeClass="text-[var(--aqua)]"
+                        icon={<CommentIcon />}
+                      />
+                      <SocialActionButton
+                        isActive={Boolean(trip.isSaved)}
+                        isDisabled={Boolean(pendingTripActions[trip.id]?.save)}
+                        label="Save"
+                        onClick={() => void handleSave(trip.id)}
+                        activeClass="text-[var(--gold)]"
+                        icon={<BookmarkIcon filled={Boolean(trip.isSaved)} />}
+                      />
                     </div>
 
                     {activeCommentTripId === trip.id ? (
@@ -263,7 +389,6 @@ export function HomeSocialPage() {
           <SocialRightRail isLightMode={isLightMode} users={people} activity={activity} />
         </div>
       </section>
-      )}
 
       {storyModal.open ? (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-3 sm:p-4">
@@ -369,11 +494,26 @@ export function HomeSocialPage() {
   );
 }
 
-function ActionPill({ children, icon, tone }) {
+function ActionPill({ children, icon, onClick, tone }) {
   return (
-    <button type="button" className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-2 transition hover:bg-white/8 ${tone}`}>
+    <button type="button" onClick={onClick} className={`flex items-center justify-center gap-2 rounded-2xl px-3 py-2 transition hover:bg-white/8 ${tone}`}>
       {icon}
       <span>{children}</span>
+    </button>
+  );
+}
+
+function SocialActionButton({ isActive, isDisabled = false, label, onClick, icon, activeClass }) {
+  return (
+    <button
+      type="button"
+      disabled={isDisabled}
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={`flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-medium transition disabled:opacity-60 ${isActive ? activeClass : "text-inherit"} hover:bg-white/8`}
+    >
+      {icon}
     </button>
   );
 }
@@ -387,4 +527,55 @@ function formatRelativeTime(value) {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+function buildHomeFeedCacheKey(token) {
+  return `bondly-home-feed:${token ? "auth" : "public"}`;
+}
+
+function readHomeFeedCache(token) {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const raw = window.localStorage.getItem(buildHomeFeedCacheKey(token));
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.timestamp > homeFeedCacheTtlMs) {
+      window.localStorage.removeItem(buildHomeFeedCacheKey(token));
+      return {};
+    }
+
+    return parsed.data || {};
+  } catch {
+    return {};
+  }
+}
+
+function writeHomeFeedCache(token, data) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      buildHomeFeedCacheKey(token),
+      JSON.stringify({ timestamp: Date.now(), data }),
+    );
+  } catch {
+    // Local cache is best-effort so the live feed still works if storage is unavailable.
+  }
+}
+
+function hasCachedHomeFeed(feed) {
+  return Boolean(
+    feed?.featuredTrips?.length ||
+      feed?.stories?.length ||
+      feed?.people?.length ||
+      feed?.activity?.length,
+  );
 }

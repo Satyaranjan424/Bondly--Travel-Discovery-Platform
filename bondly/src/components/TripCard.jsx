@@ -1,5 +1,14 @@
 ﻿import { Link } from "react-router-dom";
 
+import { BookmarkIcon, CommentIcon, HeartIcon } from "./social/SocialIcons.jsx";
+
+const budgetLabels = {
+  $: "Under $800",
+  $$: "$800-$2,000",
+  $$$: "$2,000-$4,000",
+  $$$$: "$4,000+",
+};
+
 export function TripCard({ trip }) {
   return (
     <article className="group overflow-hidden rounded-2xl bg-[#0f172a] border border-white/10 hover:border-cyan-400/40 transition duration-300 hover:-translate-y-1">
@@ -9,6 +18,8 @@ export function TripCard({ trip }) {
         <img
           src={trip.coverImage}
           alt={trip.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
         />
 
@@ -55,7 +66,7 @@ export function TripCard({ trip }) {
 
         {/* Stats */}
         <div className="flex justify-between text-sm text-white/70">
-          <span>💰 {trip.budget}</span>
+          <span>💰 {budgetLabels[trip.budget] || trip.budget}</span>
           <span>📅 {trip.durationDays} days</span>
           <span>⭐ {trip.averageRating || "New"}</span>
         </div>
@@ -64,7 +75,9 @@ export function TripCard({ trip }) {
         <div className="flex items-center justify-between pt-2 border-t border-white/10">
 
           <div className="flex gap-4 text-sm text-white/60">
-            <span>❤️ {trip.saveCount ?? 0}</span>
+            <span className="flex items-center gap-1.5"><HeartIcon className="h-4 w-4" /> {trip.likeCount ?? 0}</span>
+            <span className="flex items-center gap-1.5"><CommentIcon className="h-4 w-4" /> {trip.commentCount ?? trip.comments?.length ?? 0}</span>
+            <span className="flex items-center gap-1.5"><BookmarkIcon className="h-4 w-4" /> {trip.saveCount ?? 0}</span>
           </div>
 
           <Link

@@ -77,3 +77,31 @@ CREATE TABLE IF NOT EXISTS stories (
   body TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE IF NOT EXISTS user_follows (
+  follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  following_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (follower_id, following_id),
+  CHECK (follower_id <> following_id)
+);
+
+CREATE TABLE IF NOT EXISTS direct_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (sender_id <> recipient_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trips_visibility_created_at ON trips (visibility, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_trips_author_created_at ON trips (author_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_trip_created_at ON comments (trip_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reviews_trip_created_at ON reviews (trip_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_photos_trip_created_at ON photos (trip_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_saved_trips_trip_id ON saved_trips (trip_id);
+CREATE INDEX IF NOT EXISTS idx_trip_likes_trip_id ON trip_likes (trip_id);
+CREATE INDEX IF NOT EXISTS idx_user_follows_following_id ON user_follows (following_id);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_thread_created_at ON direct_messages (sender_id, recipient_id, created_at DESC);

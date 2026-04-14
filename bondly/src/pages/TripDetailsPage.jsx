@@ -2,6 +2,7 @@
 import { useLocation, useParams } from "react-router-dom";
 import { api } from "../lib/api.js";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 
 const inputClass = "w-full rounded-[1.2rem] border border-white/10 bg-[rgba(255,255,255,0.04)] px-4 py-3 text-white outline-none placeholder:text-white/30";
 
@@ -9,6 +10,7 @@ export function TripDetailsPage() {
   const { tripId } = useParams();
   const location = useLocation();
   const { token, isAuthenticated } = useAuth();
+  const { showToast } = useToast();
   const [trip, setTrip] = useState(null);
   const [message, setMessage] = useState("Loading trip...");
   const [notice, setNotice] = useState(() => location.state?.notice || "");
@@ -40,6 +42,7 @@ export function TripDetailsPage() {
       setNotice("");
       reset();
       setMessage(successMessage);
+      showToast({ type: payload?.rating ? "submit" : payload?.imageUrl ? "submit" : action === api.saveTrip ? "save" : "submit", message: successMessage });
     } catch (error) {
       setNotice("");
       setMessage(error.message);
@@ -60,7 +63,7 @@ export function TripDetailsPage() {
             <h1 className="mt-4 font-heading text-5xl text-white">{trip.title}</h1>
             <p className="mt-5 text-base leading-8 text-white/66">{trip.summary}</p>
             <div className="mt-6 flex flex-wrap gap-2">{trip.tags.map((tag) => <span key={tag} className="rounded-full bg-white/8 px-3 py-1 text-sm text-white/65">{tag}</span>)}</div>
-            <button type="button" onClick={() => void postAction(api.saveTrip, {}, trip.isSaved ? "Trip already saved." : "Trip saved.", () => {})} className="mt-7 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">{trip.isSaved ? "Saved" : "Save trip"}</button>
+            <button type="button" onClick={() => void postAction(api.saveTrip, {}, trip.isSaved ? "Trip removed from saved posts." : "Trip saved.", () => {})} className="mt-7 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950">{trip.isSaved ? "Saved" : "Save trip"}</button>
           </div>
           <div className="grid gap-4 md:grid-cols-3">{[{ label: "Duration", value: `${trip.durationDays} days` }, { label: "Budget", value: trip.budget }, { label: "Rating", value: trip.averageRating ? `${trip.averageRating}/5` : "New" }].map((item) => <div key={item.label} className="rounded-[1.6rem] border border-white/10 bg-[#081321] p-5"><p className="text-xs uppercase tracking-[0.24em] text-white/45">{item.label}</p><p className="mt-3 font-heading text-3xl text-white">{item.value}</p></div>)}</div>
         </div>

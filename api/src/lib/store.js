@@ -1,6 +1,11 @@
 import { Pool } from "pg";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createPasswordHash } from "./security.js";
-import { seedComments, seedPhotos, seedReviews, seedSavedTrips, seedStories, seedTripLikes, seedTrips, seedUsers } from "../data/seed.js";
+import { seedComments, seedFollows, seedMessages, seedPhotos, seedReviews, seedSavedTrips, seedStories, seedTripLikes, seedTrips, seedUsers } from "../data/seed.js";
+
+const schemaPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../schema.sql");
 
 const normalizeUser = (user) => ({
   id: user.id,
@@ -29,6 +34,22 @@ const buildActivityItem = ({ id, type, user, message, createdAt, tripId = null }
   tripId,
 });
 
+const buildProfileStats = ({
+  postCount = 0,
+  followerCount = 0,
+  followingCount = 0,
+  isFollowing = false,
+  isFollowedBy = false,
+  messageCount = 0,
+} = {}) => ({
+  postCount,
+  followerCount,
+  followingCount,
+  isFollowing,
+  isFollowedBy,
+  messageCount,
+});
+
 class MemoryStore {
   constructor() {
     this.users = seedUsers.map((user) => ({
@@ -42,6 +63,8 @@ class MemoryStore {
     this.savedTrips = [...seedSavedTrips];
     this.tripLikes = [...seedTripLikes];
     this.stories = [...seedStories];
+    this.follows = [...seedFollows];
+    this.messages = [...seedMessages];
   }
 
   async health() {
@@ -82,7 +105,7 @@ class MemoryStore {
     return user;
   }
 
-  buildTrip(trip, currentUserId = null) {
+  buildTrip(trip, currentUserId = null, { includeDetails = true } = {}) {
     const author = this.users.find((user) => user.id === trip.authorId);
     const tripComments = this.comments
       .filter((comment) => comment.tripId === trip.id)
@@ -111,9 +134,9 @@ class MemoryStore {
     return {
       ...trip,
       author: normalizeUser(author),
-      comments: tripComments,
-      reviews: tripReviews,
-      photos: tripPhotos,
+      comments: includeDetails ? tripComments : [],
+      reviews: includeDetails ? tripReviews : [],
+      photos: includeDetails ? tripPhotos : [],
       saveCount,
       likeCount,
       commentCount: tripComments.length,
@@ -124,9 +147,9 @@ class MemoryStore {
     };
   }
 
-  async getPublicTrips({ query = "", currentUserId = null } = {}) {
+  async getPublicTrips({ query = "", currentUserId = null, limit = null, includeDetails = true } = {}) {
     const normalizedQuery = query.trim().toLowerCase();
-    return this.trips
+    let trips = this.trips
       .filter((trip) => trip.visibility === "public")
       .filter((trip) => {
         if (!normalizedQuery) {
@@ -138,20 +161,30 @@ class MemoryStore {
           .toLowerCase()
           .includes(normalizedQuery);
       })
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .map((trip) => this.buildTrip(trip, currentUserId));
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (limit) {
+      trips = trips.slice(0, limit);
+    }
+
+    return trips.map((trip) => this.buildTrip(trip, currentUserId, { includeDetails }));
   }
 
   async getTripById(tripId, currentUserId = null) {
     const trip = this.trips.find((entry) => entry.id === tripId) ?? null;
-    return trip ? this.buildTrip(trip, currentUserId) : null;
+    return trip ? this.buildTrip(trip, currentUserId, { includeDetails: true }) : null;
   }
 
-  async getUserTrips(userId) {
-    return this.trips
+  async getUserTrips(userId, { currentUserId = userId, includeDetails = true, limit = null } = {}) {
+    let trips = this.trips
       .filter((trip) => trip.authorId === userId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .map((trip) => this.buildTrip(trip, userId));
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    if (limit) {
+      trips = trips.slice(0, limit);
+    }
+
+    return trips.map((trip) => this.buildTrip(trip, currentUserId, { includeDetails }));
   }
 
   async createTrip(userId, payload) {
@@ -174,12 +207,14 @@ class MemoryStore {
     };
 
     this.trips.unshift(trip);
-    return this.buildTrip(trip, userId);
+    return this.buildTrip(trip, userId, { includeDetails: true });
   }
 
   async saveTrip(userId, tripId) {
     const existing = this.savedTrips.find((entry) => entry.userId === userId && entry.tripId === tripId);
-    if (!existing) {
+    if (existing) {
+      this.savedTrips = this.savedTrips.filter((entry) => !(entry.userId === userId && entry.tripId === tripId));
+    } else {
       this.savedTrips.push({ userId, tripId, createdAt: new Date().toISOString() });
     }
 
@@ -250,8 +285,8 @@ class MemoryStore {
     return this.getStories(userId);
   }
 
-  async getStories(currentUserId = null) {
-    return this.stories
+  async getStories(currentUserId = null, { limit = null } = {}) {
+    let stories = this.stories
       .slice()
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .map((story) => ({
@@ -259,6 +294,12 @@ class MemoryStore {
         user: normalizeUser(this.users.find((user) => user.id === story.userId)),
         isOwnStory: currentUserId ? story.userId === currentUserId : false,
       }));
+
+    if (limit) {
+      stories = stories.slice(0, limit);
+    }
+
+    return stories;
   }
 
   async getSavedTrips(userId) {
@@ -297,13 +338,122 @@ class MemoryStore {
     return [...storyMemories, ...photoMemories, ...tripMemories].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
-  async getAllUsers(currentUserId = null) {
-    return this.users
+  async getAllUsers(currentUserId = null, { limit = null } = {}) {
+    let users = this.users
       .filter((user) => !currentUserId || user.id !== currentUserId)
       .map((user) => normalizeUser(user));
+
+    if (limit) {
+      users = users.slice(0, limit);
+    }
+
+    return users;
   }
 
-  async getActivity() {
+  isThreadParticipant(message, userId, otherUserId) {
+    return (
+      (message.senderId === userId && message.recipientId === otherUserId) ||
+      (message.senderId === otherUserId && message.recipientId === userId)
+    );
+  }
+
+  getProfileStats(userId, currentUserId = null) {
+    return buildProfileStats({
+      postCount: this.trips.filter((trip) => trip.authorId === userId).length,
+      followerCount: this.follows.filter((entry) => entry.followingId === userId).length,
+      followingCount: this.follows.filter((entry) => entry.followerId === userId).length,
+      isFollowing: currentUserId ? this.follows.some((entry) => entry.followerId === currentUserId && entry.followingId === userId) : false,
+      isFollowedBy: currentUserId ? this.follows.some((entry) => entry.followerId === userId && entry.followingId === currentUserId) : false,
+      messageCount: currentUserId ? this.messages.filter((entry) => this.isThreadParticipant(entry, currentUserId, userId)).length : 0,
+    });
+  }
+
+  async toggleFollow(followerId, followingId) {
+    if (followerId === followingId) {
+      return { following: false, stats: this.getProfileStats(followingId, followerId) };
+    }
+
+    const index = this.follows.findIndex((entry) => entry.followerId === followerId && entry.followingId === followingId);
+
+    if (index >= 0) {
+      this.follows.splice(index, 1);
+    } else {
+      this.follows.push({ followerId, followingId, createdAt: new Date().toISOString() });
+    }
+
+    const stats = this.getProfileStats(followingId, followerId);
+    return { following: stats.isFollowing, stats };
+  }
+
+  async getConversation(userId, otherUserId) {
+    const otherUser = await this.findUserById(otherUserId);
+    if (!otherUser) {
+      return null;
+    }
+
+    return {
+      user: normalizeUser(otherUser),
+      stats: this.getProfileStats(otherUserId, userId),
+      messages: this.messages
+        .filter((entry) => this.isThreadParticipant(entry, userId, otherUserId))
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map((entry) => ({
+          ...entry,
+          sender: normalizeUser(this.users.find((user) => user.id === entry.senderId)),
+          recipient: normalizeUser(this.users.find((user) => user.id === entry.recipientId)),
+        })),
+    };
+  }
+
+  async sendMessage(senderId, recipientId, body) {
+    const recipient = await this.findUserById(recipientId);
+    if (!recipient) {
+      return null;
+    }
+
+    this.messages.push({
+      id: `message-${this.messages.length + 1}`,
+      senderId,
+      recipientId,
+      body,
+      createdAt: new Date().toISOString(),
+    });
+
+    return this.getConversation(senderId, recipientId);
+  }
+
+  async getInbox(userId) {
+    const relatedMessages = this.messages
+      .filter((entry) => entry.senderId === userId || entry.recipientId === userId)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    const inbox = [];
+    const seenUserIds = new Set();
+
+    relatedMessages.forEach((entry) => {
+      const otherUserId = entry.senderId === userId ? entry.recipientId : entry.senderId;
+      if (seenUserIds.has(otherUserId)) {
+        return;
+      }
+
+      const otherUser = this.users.find((item) => item.id === otherUserId);
+      if (!otherUser) {
+        return;
+      }
+
+      seenUserIds.add(otherUserId);
+      inbox.push({
+        user: normalizeUser(otherUser),
+        lastMessage: entry.body,
+        lastMessageAt: entry.createdAt,
+        unreadCount: this.messages.filter((message) => message.senderId === otherUserId && message.recipientId === userId).length,
+      });
+    });
+
+    return inbox;
+  }
+
+  async getActivity({ limit = 20 } = {}) {
     const items = [
       ...this.comments.map((comment) =>
         buildActivityItem({
@@ -334,7 +484,7 @@ class MemoryStore {
         })),
     ];
 
-    return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 20);
+    return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, limit);
   }
 
   async getPublicProfile(userId, currentUserId = null) {
@@ -345,9 +495,10 @@ class MemoryStore {
 
     return {
       user: normalizeUser(user),
-      trips: await this.getUserTrips(userId),
-      stories: await this.getStories(currentUserId).then((items) => items.filter((story) => story.userId === userId)),
-      memories: await this.getMemories(userId),
+      trips: await this.getUserTrips(userId, { currentUserId, includeDetails: false, limit: 12 }),
+      stories: await this.getStories(currentUserId, { limit: 12 }).then((items) => items.filter((story) => story.userId === userId)),
+      memories: [],
+      stats: this.getProfileStats(userId, currentUserId),
     };
   }
 
@@ -377,7 +528,7 @@ class MemoryStore {
       itinerary: updates.itinerary ?? trip.itinerary,
     });
 
-    return this.buildTrip(trip, userId);
+    return this.buildTrip(trip, userId, { includeDetails: true });
   }
 
   async deleteTrip(userId, tripId) {
@@ -414,6 +565,11 @@ class PostgresStore {
   async health() {
     await this.pool.query("select 1");
     return { mode: "postgres" };
+  }
+
+  async ensureSchema() {
+    const schema = await readFile(schemaPath, "utf8");
+    await this.pool.query(schema);
   }
 
   mapUser(row) {
@@ -469,8 +625,8 @@ class PostgresStore {
     return this.mapUser(result.rows[0]);
   }
 
-  async buildTrip(row, currentUserId = null) {
-    const trip = {
+  mapTrip(row) {
+    return {
       id: row.id,
       authorId: row.author_id,
       title: row.title,
@@ -487,6 +643,37 @@ class PostgresStore {
       itinerary: row.itinerary ?? [],
       createdAt: row.created_at,
     };
+  }
+
+  buildTripPreview(row) {
+    const author = normalizeUser({
+      id: row.author_id_ref ?? row.author_id,
+      name: row.author_name ?? row.name,
+      email: row.author_email ?? row.email,
+      bio: row.author_bio ?? row.bio,
+      location: row.author_location ?? row.location,
+      avatar_url: row.author_avatar_url ?? row.avatar_url,
+      created_at: row.author_created_at ?? row.created_at,
+    });
+
+    return {
+      ...this.mapTrip(row),
+      author,
+      comments: [],
+      reviews: [],
+      photos: [],
+      saveCount: Number(row.save_count ?? 0),
+      likeCount: Number(row.like_count ?? 0),
+      commentCount: Number(row.comment_count ?? 0),
+      reviewCount: Number(row.review_count ?? 0),
+      averageRating: row.average_rating === null || row.average_rating === undefined ? null : Number(row.average_rating),
+      isSaved: Boolean(row.is_saved),
+      isLiked: Boolean(row.is_liked),
+    };
+  }
+
+  async buildTrip(row, currentUserId = null) {
+    const trip = this.mapTrip(row);
     const author = await this.findUserById(trip.authorId);
     const [comments, reviews, photos, saves, likes] = await Promise.all([
       this.pool.query(
@@ -556,8 +743,72 @@ class PostgresStore {
     };
   }
 
-  async getPublicTrips({ query = "", currentUserId = null } = {}) {
+  async getPublicTrips({ query = "", currentUserId = null, limit = 24, includeDetails = true } = {}) {
     const normalizedQuery = `%${query.trim().toLowerCase()}%`;
+
+    if (!includeDetails) {
+      const result = await this.pool.query(
+        `select
+           t.*,
+           u.id as author_id_ref,
+           u.name as author_name,
+           u.email as author_email,
+           u.bio as author_bio,
+           u.location as author_location,
+           u.avatar_url as author_avatar_url,
+           u.created_at as author_created_at,
+           coalesce(sc.save_count, 0)::int as save_count,
+           coalesce(lc.like_count, 0)::int as like_count,
+           coalesce(cc.comment_count, 0)::int as comment_count,
+           coalesce(rs.review_count, 0)::int as review_count,
+           rs.average_rating,
+           case when $2::uuid is null then false else exists (
+             select 1 from saved_trips st where st.trip_id = t.id and st.user_id = $2
+           ) end as is_saved,
+           case when $2::uuid is null then false else exists (
+             select 1 from trip_likes tl where tl.trip_id = t.id and tl.user_id = $2
+           ) end as is_liked
+         from trips t
+         join users u on u.id = t.author_id
+         left join (
+           select trip_id, count(*)::int as save_count
+           from saved_trips
+           group by trip_id
+         ) sc on sc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as like_count
+           from trip_likes
+           group by trip_id
+         ) lc on lc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as comment_count
+           from comments
+           group by trip_id
+         ) cc on cc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as review_count, round(avg(rating)::numeric, 1) as average_rating
+           from reviews
+           group by trip_id
+         ) rs on rs.trip_id = t.id
+         where t.visibility = 'public'
+         and (
+           $1 = '%%'
+           or lower(t.title) like $1
+           or lower(t.summary) like $1
+           or lower(t.city) like $1
+           or lower(t.country) like $1
+           or exists (
+             select 1 from unnest(t.tags) as tag where lower(tag) like $1
+           )
+         )
+         order by t.created_at desc
+         limit $3`,
+        [normalizedQuery, currentUserId, limit],
+      );
+
+      return result.rows.map((row) => this.buildTripPreview(row));
+    }
+
     const result = await this.pool.query(
       `select * from trips
        where visibility = 'public'
@@ -571,8 +822,9 @@ class PostgresStore {
            select 1 from unnest(tags) as tag where lower(tag) like $1
          )
        )
-       order by created_at desc`,
-      [normalizedQuery],
+       order by created_at desc
+       limit $2`,
+      [normalizedQuery, limit],
     );
 
     return Promise.all(result.rows.map((row) => this.buildTrip(row, currentUserId)));
@@ -583,9 +835,62 @@ class PostgresStore {
     return result.rows[0] ? this.buildTrip(result.rows[0], currentUserId) : null;
   }
 
-  async getUserTrips(userId) {
-    const result = await this.pool.query("select * from trips where author_id = $1 order by created_at desc", [userId]);
-    return Promise.all(result.rows.map((row) => this.buildTrip(row, userId)));
+  async getUserTrips(userId, { currentUserId = userId, includeDetails = true, limit = 24 } = {}) {
+    if (!includeDetails) {
+      const result = await this.pool.query(
+        `select
+           t.*,
+           u.id as author_id_ref,
+           u.name as author_name,
+           u.email as author_email,
+           u.bio as author_bio,
+           u.location as author_location,
+           u.avatar_url as author_avatar_url,
+           u.created_at as author_created_at,
+           coalesce(sc.save_count, 0)::int as save_count,
+           coalesce(lc.like_count, 0)::int as like_count,
+           coalesce(cc.comment_count, 0)::int as comment_count,
+           coalesce(rs.review_count, 0)::int as review_count,
+           rs.average_rating,
+           case when $2::uuid is null then false else exists (
+             select 1 from saved_trips st where st.trip_id = t.id and st.user_id = $2
+           ) end as is_saved,
+           case when $2::uuid is null then false else exists (
+             select 1 from trip_likes tl where tl.trip_id = t.id and tl.user_id = $2
+           ) end as is_liked
+         from trips t
+         join users u on u.id = t.author_id
+         left join (
+           select trip_id, count(*)::int as save_count
+           from saved_trips
+           group by trip_id
+         ) sc on sc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as like_count
+           from trip_likes
+           group by trip_id
+         ) lc on lc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as comment_count
+           from comments
+           group by trip_id
+         ) cc on cc.trip_id = t.id
+         left join (
+           select trip_id, count(*)::int as review_count, round(avg(rating)::numeric, 1) as average_rating
+           from reviews
+           group by trip_id
+         ) rs on rs.trip_id = t.id
+         where t.author_id = $1
+         order by t.created_at desc
+         limit $3`,
+        [userId, currentUserId, limit],
+      );
+
+      return result.rows.map((row) => this.buildTripPreview(row));
+    }
+
+    const result = await this.pool.query("select * from trips where author_id = $1 order by created_at desc limit $2", [userId, limit]);
+    return Promise.all(result.rows.map((row) => this.buildTrip(row, currentUserId)));
   }
 
   async createTrip(userId, payload) {
@@ -616,10 +921,12 @@ class PostgresStore {
   }
 
   async saveTrip(userId, tripId) {
-    await this.pool.query(
-      "insert into saved_trips (user_id, trip_id) values ($1, $2) on conflict (user_id, trip_id) do nothing",
-      [userId, tripId],
-    );
+    const existing = await this.pool.query("select 1 from saved_trips where user_id = $1 and trip_id = $2", [userId, tripId]);
+    if (existing.rowCount) {
+      await this.pool.query("delete from saved_trips where user_id = $1 and trip_id = $2", [userId, tripId]);
+    } else {
+      await this.pool.query("insert into saved_trips (user_id, trip_id) values ($1, $2)", [userId, tripId]);
+    }
     return this.getTripById(tripId, userId);
   }
 
@@ -665,12 +972,14 @@ class PostgresStore {
     return this.getStories(userId);
   }
 
-  async getStories(currentUserId = null) {
+  async getStories(currentUserId = null, { limit = null } = {}) {
     const result = await this.pool.query(
       `select s.*, u.id as user_id_ref, u.name, u.email, u.bio, u.location, u.avatar_url, u.created_at as user_created_at
        from stories s
        join users u on u.id = s.user_id
-       order by s.created_at desc`,
+       order by s.created_at desc
+       ${limit ? "limit $1" : ""}`,
+      limit ? [limit] : [],
     );
 
     return result.rows.map((story) => ({
@@ -720,18 +1029,181 @@ class PostgresStore {
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
-  async getAllUsers(currentUserId = null) {
+  async getAllUsers(currentUserId = null, { limit = null } = {}) {
     const result = await this.pool.query(
       `select * from users
        where ($1::uuid is null or id <> $1)
-       order by created_at desc`,
-      [currentUserId],
+       order by created_at desc
+       ${limit ? "limit $2" : ""}`,
+      limit ? [currentUserId, limit] : [currentUserId],
     );
 
     return result.rows.map((row) => normalizeUser(this.mapUser(row)));
   }
 
-  async getActivity() {
+  async getProfileStats(userId, currentUserId = null) {
+    const [posts, followers, following, messages] = await Promise.all([
+      this.pool.query("select count(*)::int as count from trips where author_id = $1", [userId]),
+      this.pool.query("select count(*)::int as count from user_follows where following_id = $1", [userId]),
+      this.pool.query("select count(*)::int as count from user_follows where follower_id = $1", [userId]),
+      currentUserId
+        ? this.pool.query(
+            `select count(*)::int as count
+             from direct_messages
+             where (sender_id = $1 and recipient_id = $2) or (sender_id = $2 and recipient_id = $1)`,
+            [currentUserId, userId],
+          )
+        : Promise.resolve({ rows: [{ count: 0 }] }),
+    ]);
+
+    let isFollowing = false;
+    let isFollowedBy = false;
+
+    if (currentUserId) {
+      const [relation, reciprocal] = await Promise.all([
+        this.pool.query("select 1 from user_follows where follower_id = $1 and following_id = $2", [currentUserId, userId]),
+        this.pool.query("select 1 from user_follows where follower_id = $1 and following_id = $2", [userId, currentUserId]),
+      ]);
+      isFollowing = relation.rowCount > 0;
+      isFollowedBy = reciprocal.rowCount > 0;
+    }
+
+    return buildProfileStats({
+      postCount: posts.rows[0].count,
+      followerCount: followers.rows[0].count,
+      followingCount: following.rows[0].count,
+      isFollowing,
+      isFollowedBy,
+      messageCount: messages.rows[0].count,
+    });
+  }
+
+  async toggleFollow(followerId, followingId) {
+    if (followerId === followingId) {
+      return { following: false, stats: await this.getProfileStats(followingId, followerId) };
+    }
+
+    const existing = await this.pool.query("select 1 from user_follows where follower_id = $1 and following_id = $2", [followerId, followingId]);
+    if (existing.rowCount) {
+      await this.pool.query("delete from user_follows where follower_id = $1 and following_id = $2", [followerId, followingId]);
+    } else {
+      await this.pool.query("insert into user_follows (follower_id, following_id) values ($1, $2)", [followerId, followingId]);
+    }
+
+    const stats = await this.getProfileStats(followingId, followerId);
+    return { following: stats.isFollowing, stats };
+  }
+
+  async getConversation(userId, otherUserId) {
+    const otherUser = await this.findUserById(otherUserId);
+    if (!otherUser) {
+      return null;
+    }
+
+    const [messages, stats] = await Promise.all([
+      this.pool.query(
+        `select m.id, m.sender_id, m.recipient_id, m.body, m.created_at,
+                sender.id as sender_user_id, sender.name as sender_name, sender.email as sender_email, sender.bio as sender_bio,
+                sender.location as sender_location, sender.avatar_url as sender_avatar_url, sender.created_at as sender_created_at,
+                recipient.id as recipient_user_id, recipient.name as recipient_name, recipient.email as recipient_email, recipient.bio as recipient_bio,
+                recipient.location as recipient_location, recipient.avatar_url as recipient_avatar_url, recipient.created_at as recipient_created_at
+         from direct_messages m
+         join users sender on sender.id = m.sender_id
+         join users recipient on recipient.id = m.recipient_id
+         where (m.sender_id = $1 and m.recipient_id = $2) or (m.sender_id = $2 and m.recipient_id = $1)
+         order by m.created_at asc`,
+        [userId, otherUserId],
+      ),
+      this.getProfileStats(otherUserId, userId),
+    ]);
+
+    return {
+      user: normalizeUser(otherUser),
+      stats,
+      messages: messages.rows.map((row) => ({
+        id: row.id,
+        senderId: row.sender_id,
+        recipientId: row.recipient_id,
+        body: row.body,
+        createdAt: row.created_at,
+        sender: normalizeUser({
+          id: row.sender_user_id,
+          name: row.sender_name,
+          email: row.sender_email,
+          bio: row.sender_bio,
+          location: row.sender_location,
+          avatar_url: row.sender_avatar_url,
+          created_at: row.sender_created_at,
+        }),
+        recipient: normalizeUser({
+          id: row.recipient_user_id,
+          name: row.recipient_name,
+          email: row.recipient_email,
+          bio: row.recipient_bio,
+          location: row.recipient_location,
+          avatar_url: row.recipient_avatar_url,
+          created_at: row.recipient_created_at,
+        }),
+      })),
+    };
+  }
+
+  async sendMessage(senderId, recipientId, body) {
+    const result = await this.pool.query(
+      "insert into direct_messages (sender_id, recipient_id, body) values ($1, $2, $3) returning id",
+      [senderId, recipientId, body],
+    );
+
+    if (!result.rowCount) {
+      return null;
+    }
+
+    return this.getConversation(senderId, recipientId);
+  }
+
+  async getInbox(userId) {
+    const result = await this.pool.query(
+      `with ranked_messages as (
+         select
+           case when sender_id = $1 then recipient_id else sender_id end as other_user_id,
+           body,
+           created_at,
+           row_number() over (
+             partition by case when sender_id = $1 then recipient_id else sender_id end
+             order by created_at desc
+           ) as row_num
+         from direct_messages
+         where sender_id = $1 or recipient_id = $1
+       ),
+       unread_messages as (
+         select sender_id as other_user_id, count(*)::int as unread_count
+         from direct_messages
+         where recipient_id = $1
+         group by sender_id
+       )
+       select
+         rm.other_user_id,
+         rm.body,
+         rm.created_at,
+         coalesce(um.unread_count, 0)::int as unread_count,
+         u.*
+       from ranked_messages rm
+       join users u on u.id = rm.other_user_id
+       left join unread_messages um on um.other_user_id = rm.other_user_id
+       where rm.row_num = 1
+       order by rm.created_at desc`,
+      [userId],
+    );
+
+    return result.rows.map((row) => ({
+      user: normalizeUser(this.mapUser(row)),
+      lastMessage: row.body,
+      lastMessageAt: row.created_at,
+      unreadCount: row.unread_count,
+    }));
+  }
+
+  async getActivity({ limit = 20 } = {}) {
     const [comments, reviews, likes] = await Promise.all([
       this.pool.query(
         `select c.id, c.trip_id, c.body as message, c.created_at, u.*
@@ -764,7 +1236,7 @@ class PostgresStore {
 
     return [...mapRows(comments.rows, "comment"), ...mapRows(reviews.rows, "review"), ...mapRows(likes.rows, "like")]
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 20);
+      .slice(0, limit);
   }
 
   async getPublicProfile(userId, currentUserId = null) {
@@ -773,13 +1245,13 @@ class PostgresStore {
       return null;
     }
 
-    const [trips, stories, memories] = await Promise.all([
-      this.getUserTrips(userId),
-      this.getStories(currentUserId).then((items) => items.filter((story) => story.userId === userId)),
-      this.getMemories(userId),
+    const [trips, stories, stats] = await Promise.all([
+      this.getUserTrips(userId, { currentUserId, includeDetails: false, limit: 12 }),
+      this.getStories(currentUserId, { limit: 12 }).then((items) => items.filter((story) => story.userId === userId)),
+      this.getProfileStats(userId, currentUserId),
     ]);
 
-    return { user: normalizeUser(user), trips, stories, memories };
+    return { user: normalizeUser(user), trips, stories, memories: [], stats };
   }
 
   // ADD THIS INSIDE PostgresStore CLASS (before closing bracket)
@@ -844,6 +1316,7 @@ export const createStore = async ({ databaseUrl }) => {
   const store = new PostgresStore(databaseUrl);
 
   try {
+    await store.ensureSchema();
     await store.health();
     return store;
   } catch (error) {

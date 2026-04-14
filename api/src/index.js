@@ -9,6 +9,13 @@ import { createSessionStore } from "./lib/sessionStore.js";
 
 const requiredTripFields = ["title", "summary", "coverImage", "city", "country", "travelMonth", "budget", "durationDays", "visibility"];
 const parseList = (value) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+const parsePositiveInt = (value, fallback, max = 100) => {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+};
 
 const bootstrap = async () => {
   let redisClient = null;
@@ -79,19 +86,45 @@ const bootstrap = async () => {
   });
 
   app.get("/auth/me", requireAuth, async (c) => c.json({ user: normalizeUser(c.get("session").user) }));
+  app.get("/auth/inbox", requireAuth, async (c) => {
+    const inbox = await store.getInbox(c.get("session").user.id);
+    return c.json({ inbox });
+  });
   app.put("/auth/profile", requireAuth, async (c) => {
     const body = await c.req.json();
     const updated = await store.updateUser(c.get("session").user.id, { name: body.name ? String(body.name).trim() : undefined, bio: body.bio !== undefined ? String(body.bio) : undefined, location: body.location !== undefined ? String(body.location) : undefined, avatarUrl: body.avatarUrl !== undefined ? String(body.avatarUrl) : undefined });
     return c.json({ user: normalizeUser(updated) });
   });
 
+  app.get("/auth/conversations/:userId", requireAuth, async (c) => {
+    const conversation = await store.getConversation(c.get("session").user.id, c.req.param("userId"));
+    if (!conversation) return c.json({ error: "User not found" }, 404);
+    return c.json(conversation);
+  });
+
+  app.post("/auth/conversations/:userId", requireAuth, async (c) => {
+    const body = await c.req.json();
+    const message = String(body.body ?? "").trim();
+    if (!message) return c.json({ error: "Message body is required." }, 400);
+    const conversation = await store.sendMessage(c.get("session").user.id, c.req.param("userId"), message);
+    if (!conversation) return c.json({ error: "User not found" }, 404);
+    return c.json(conversation, 201);
+  });
+
   app.get("/explore", async (c) => {
-    const trips = await store.getPublicTrips({ query: c.req.query("q") ?? "", currentUserId: c.get("session")?.user?.id ?? null });
+    const trips = await store.getPublicTrips({
+      query: c.req.query("q") ?? "",
+      currentUserId: c.get("session")?.user?.id ?? null,
+      limit: parsePositiveInt(c.req.query("limit"), 24),
+      includeDetails: c.req.query("view") !== "feed",
+    });
     return c.json({ trips });
   });
 
   app.get("/stories", async (c) => {
-    const stories = await store.getStories(c.get("session")?.user?.id ?? null);
+    const stories = await store.getStories(c.get("session")?.user?.id ?? null, {
+      limit: parsePositiveInt(c.req.query("limit"), 18),
+    });
     return c.json({ stories });
   });
 
@@ -106,7 +139,9 @@ const bootstrap = async () => {
   });
 
   app.get("/users", async (c) => {
-    const users = await store.getAllUsers(c.get("session")?.user?.id ?? null);
+    const users = await store.getAllUsers(c.get("session")?.user?.id ?? null, {
+      limit: parsePositiveInt(c.req.query("limit"), 12),
+    });
     return c.json({ users });
   });
 
@@ -116,8 +151,15 @@ const bootstrap = async () => {
     return c.json(profile);
   });
 
+  app.post("/users/:userId/follow", requireAuth, async (c) => {
+    const result = await store.toggleFollow(c.get("session").user.id, c.req.param("userId"));
+    return c.json(result);
+  });
+
   app.get("/social/activity", async (c) => {
-    const activity = await store.getActivity();
+    const activity = await store.getActivity({
+      limit: parsePositiveInt(c.req.query("limit"), 20),
+    });
     return c.json({ activity });
   });
 

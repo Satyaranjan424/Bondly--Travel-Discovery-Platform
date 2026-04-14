@@ -2,6 +2,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { TripForm } from "../components/TripForm.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 import { api } from "../lib/api.js";
 import { tripToFormValues } from "../lib/trips.js";
 
@@ -9,6 +10,7 @@ export function EditTripPage() {
   const navigate = useNavigate();
   const { tripId } = useParams();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [form, setForm] = useState(null);
   const [status, setStatus] = useState("Loading trip...");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +32,7 @@ export function EditTripPage() {
     try {
       setIsSubmitting(true);
       const response = await api.updateTrip(token, tripId, form);
+      showToast({ type: "update", message: "Your trip details were refreshed successfully." });
       navigate(`/trips/${response.trip.id}`, {
         state: {
           notice: "Trip updated successfully.",

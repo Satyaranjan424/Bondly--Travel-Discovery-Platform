@@ -2,12 +2,14 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TripForm } from "../components/TripForm.jsx";
 import { useAuth } from "../hooks/useAuth.jsx";
+import { useToast } from "../hooks/useToast.jsx";
 import { api } from "../lib/api.js";
 import { emptyTripForm } from "../lib/trips.js";
 
 export function PublishTripPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
+  const { showToast } = useToast();
   const [form, setForm] = useState(emptyTripForm);
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,6 +19,7 @@ export function PublishTripPage() {
     try {
       setIsSubmitting(true);
       const response = await api.createTrip(token, form);
+      showToast({ type: "publish", message: "Your trip is now live on Bondly." });
       navigate(`/trips/${response.trip.id}`);
     } catch (error) {
       setStatus(error.message);

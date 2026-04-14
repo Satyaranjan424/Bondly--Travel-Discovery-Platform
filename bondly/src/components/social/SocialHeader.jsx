@@ -23,8 +23,11 @@ export function SocialHeader({ homeMode, onToggleMode, isAuthenticated, user, on
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[rgba(7,18,34,0.8)] shadow-[0_18px_54px_rgba(2,6,23,0.46)] backdrop-blur-xl">
       <div className="mx-auto grid max-w-[96rem] grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(16rem,18rem)_1fr_auto] lg:px-6">
         <div className="flex items-center gap-3">
-          <NavLink to="/" className="grid h-12 w-12 place-items-center rounded-full bg-[linear-gradient(135deg,#5eead4,#8b5cf6)] text-xl font-black text-slate-950 shadow-[0_14px_34px_rgba(94,234,212,0.28)]">
-            B
+          <NavLink to="/" className="flex items-center gap-3">
+            <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#5eead4,#8b5cf6)] text-xl font-black text-slate-950 shadow-[0_14px_34px_rgba(94,234,212,0.28)] ring-1 ring-white/20">
+              <span className="leading-none">B</span>
+            </span>
+            <span className="hidden text-lg font-semibold tracking-[0.18em] text-white lg:block">BONDLY</span>
           </NavLink>
           <form onSubmit={handleSubmit} className="hidden items-center gap-3 rounded-full border border-white/10 bg-white/6 px-4 py-2 text-sm text-white/55 md:flex">
             <SearchIcon />
@@ -77,14 +80,14 @@ export function SocialHeader({ homeMode, onToggleMode, isAuthenticated, user, on
                 </span>
                 <span>{user?.name || "Traveler"}</span>
               </NavLink>
-              <NavLink to="/profile" className="flex items-center gap-3 rounded-2xl px-3 py-3 text-white/70 transition hover:bg-white/6 hover:text-white">
+              <NavLink to="/settings" className="flex items-center gap-3 rounded-2xl px-3 py-3 text-white/70 transition hover:bg-white/6 hover:text-white">
                 <SettingsGlyph />
                 <span>Settings</span>
               </NavLink>
-              <a href="#privacy" className="flex items-center gap-3 rounded-2xl px-3 py-3 text-white/70 transition hover:bg-white/6 hover:text-white">
+              <NavLink to="/privacy-policy" className="flex items-center gap-3 rounded-2xl px-3 py-3 text-white/70 transition hover:bg-white/6 hover:text-white">
                 <ShieldGlyph />
                 <span>Privacy policy</span>
-              </a>
+              </NavLink>
               {isAuthenticated ? (
                 <button
                   type="button"

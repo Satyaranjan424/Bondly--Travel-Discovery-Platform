@@ -10,7 +10,7 @@ export function SocialLeftRail({ avatar, displayName, isLightMode }) {
 
   return (
     <aside className="hidden lg:block">
-      <div className="sticky top-24 space-y-3">
+      <div className="sticky top-24 max-h-[calc(100vh-7rem)] space-y-3 overflow-y-auto pr-1">
         <Link to="/profile" className={`flex items-center gap-3 rounded-3xl p-4 ${panelClass}`}>
           <img src={avatar} alt={displayName} className="h-14 w-14 rounded-full object-cover ring-2 ring-[var(--aqua)]/30" />
           <div>
@@ -42,8 +42,8 @@ export function SocialLeftRail({ avatar, displayName, isLightMode }) {
 
         <div className="rounded-[1.75rem] bg-[linear-gradient(135deg,rgba(94,234,212,0.28),rgba(139,92,246,0.3),rgba(244,114,182,0.24))] p-5 text-white shadow-[0_20px_54px_rgba(94,234,212,0.16)]">
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-white/75">Travel pulse</p>
-          <h2 className="mt-3 text-2xl font-semibold leading-tight">Turn Bondly into a proper social travel feed.</h2>
-          <p className="mt-3 text-sm leading-6 text-white/80">Left rail for discovery, center for stories, right for people and activity.</p>
+          <h2 className="mt-3 text-2xl font-semibold leading-tight">Share real trips, save useful ideas, and build a travel profile people trust.</h2>
+          <p className="mt-3 text-sm leading-6 text-white/80">Bondly works best when travelers publish authentic itineraries, upload real memories, and use likes, comments, and saves to highlight genuinely helpful experiences.</p>
         </div>
       </div>
     </aside>
