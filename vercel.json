@@ -5,7 +5,11 @@
   "outputDirectory": "bondly/dist",
   "rewrites": [
     {
-      "source": "/((?!api/.*).*)",
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/:path*",
       "destination": "/index.html"
     }
   ]
