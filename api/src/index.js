@@ -31,7 +31,7 @@ export const createApp = async () => {
   }
 
   const store = await createStore({ databaseUrl: process.env.DATABASE_URL });
-  const sessions = createSessionStore(redisClient);
+  const sessions = createSessionStore(redisClient, store);
   const app = new Hono();
   const allowedOrigins = parseOrigins(process.env.CORS_ORIGIN);
 
@@ -64,7 +64,15 @@ export const createApp = async () => {
   };
 
   app.get("/", (c) => c.json({ name: "Bondly API", status: "ok" }));
-  app.get("/health", async (c) => c.json({ status: "ok", ...(await store.health()), sessions: process.env.REDIS_URL ? "redis-or-memory" : "memory" }));
+  app.get("/health", async (c) => c.json({ status: "ok", ...(await store.health()), sessions: process.env.REDIS_URL ? "redis-or-memory" : store.pool ? "postgres" : "memory" }));
+  app.get("/debug", (c) => c.json({
+    status: "ok",
+    databaseConfigured: Boolean(process.env.DATABASE_URL),
+    databaseRequired: process.env.DATABASE_REQUIRED === "true",
+    sessionSecretConfigured: Boolean(process.env.SESSION_SECRET),
+    corsOriginConfigured: Boolean(process.env.CORS_ORIGIN),
+    viteApiUrlConfigured: Boolean(process.env.VITE_API_URL),
+  }));
 
   app.post("/auth/signup", async (c) => {
     const body = await c.req.json();

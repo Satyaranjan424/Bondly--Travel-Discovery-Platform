@@ -118,20 +118,35 @@ async function request(path, { method = "GET", body, token, signal, invalidateMa
     }
   }
 
-  const response = await fetch(`${apiBase}${path}`, {
-    method,
-    signal,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let response;
 
-  const data = await response.json().catch(() => ({}));
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      method,
+      signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch (error) {
+    throw new Error(`Could not reach the API at ${apiBase}. ${error.message}`);
+  }
+
+  const text = await response.text();
+  const data = text
+    ? (() => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { error: text };
+        }
+      })()
+    : {};
 
   if (!response.ok) {
-    throw new Error(data.error || "Something went wrong.");
+    throw new Error(data.error || `API request failed with status ${response.status}.`);
   }
 
   if (method === "GET") {

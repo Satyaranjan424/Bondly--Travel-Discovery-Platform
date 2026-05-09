@@ -95,6 +95,13 @@ CREATE TABLE IF NOT EXISTS direct_messages (
   CHECK (sender_id <> recipient_id)
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  token TEXT PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days'
+);
+
 CREATE INDEX IF NOT EXISTS idx_trips_visibility_created_at ON trips (visibility, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_trips_author_created_at ON trips (author_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_stories_created_at ON stories (created_at DESC);
@@ -105,3 +112,5 @@ CREATE INDEX IF NOT EXISTS idx_saved_trips_trip_id ON saved_trips (trip_id);
 CREATE INDEX IF NOT EXISTS idx_trip_likes_trip_id ON trip_likes (trip_id);
 CREATE INDEX IF NOT EXISTS idx_user_follows_following_id ON user_follows (following_id);
 CREATE INDEX IF NOT EXISTS idx_direct_messages_thread_created_at ON direct_messages (sender_id, recipient_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions (expires_at);
