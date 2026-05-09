@@ -1308,18 +1308,48 @@ class PostgresStore {
   }
 }
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const connectWithRetry = async (store, retries = 6) => {
+  let lastError;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await store.ensureSchema();
+      await store.health();
+      return;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === retries) {
+        break;
+      }
+
+      const delayMs = attempt * 2000;
+      console.warn(`Postgres connection attempt ${attempt} failed: ${error.message}. Retrying in ${delayMs / 1000}s...`);
+      await wait(delayMs);
+    }
+  }
+
+  throw lastError;
+};
+
 export const createStore = async ({ databaseUrl }) => {
   if (!databaseUrl) {
     return new MemoryStore();
   }
 
   const store = new PostgresStore(databaseUrl);
+  const databaseRequired = process.env.DATABASE_REQUIRED === "true";
 
   try {
-    await store.ensureSchema();
-    await store.health();
+    await connectWithRetry(store);
     return store;
   } catch (error) {
+    if (databaseRequired) {
+      throw error;
+    }
+
     console.warn("Postgres unavailable, falling back to memory store:", error.message);
     return new MemoryStore();
   }
