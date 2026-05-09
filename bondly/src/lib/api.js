@@ -1,4 +1,9 @@
-const apiBase = import.meta.env.VITE_API_URL || "http://localhost:3001";
+const configuredApiBase = import.meta.env.VITE_API_URL;
+const apiBase = (configuredApiBase || "http://localhost:3001").replace(/\/+$/, "");
+
+if (!configuredApiBase && import.meta.env.PROD) {
+  console.warn("VITE_API_URL is not configured. The production app will try to call localhost.");
+}
 const cacheTtlMs = 5 * 60_000;
 const maxCachedPayloadBytes = 180_000;
 
