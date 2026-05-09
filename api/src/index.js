@@ -9,6 +9,7 @@ import { createSessionStore } from "./lib/sessionStore.js";
 
 const requiredTripFields = ["title", "summary", "coverImage", "city", "country", "travelMonth", "budget", "durationDays", "visibility"];
 const parseList = (value) => Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : typeof value === "string" ? value.split(",").map((item) => item.trim()).filter(Boolean) : [];
+const parseOrigins = (value) => String(value || "http://localhost:5173").split(",").map((item) => item.trim()).filter(Boolean);
 const parsePositiveInt = (value, fallback, max = 100) => {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -32,8 +33,17 @@ const bootstrap = async () => {
   const store = await createStore({ databaseUrl: process.env.DATABASE_URL });
   const sessions = createSessionStore(redisClient);
   const app = new Hono();
+  const allowedOrigins = parseOrigins(process.env.CORS_ORIGIN);
 
-  app.use("*", cors({ origin: process.env.CORS_ORIGIN || "http://localhost:5173", allowHeaders: ["Content-Type", "Authorization"], allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], credentials: true }));
+  app.use("*", cors({
+    origin: (origin) => {
+      if (!origin) return allowedOrigins[0];
+      return allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    },
+    allowHeaders: ["Content-Type", "Authorization"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+  }));
 
   app.use("*", async (c, next) => {
     const authHeader = c.req.header("Authorization");
