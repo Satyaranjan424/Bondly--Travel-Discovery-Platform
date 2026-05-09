@@ -1,0 +1,10 @@
+node_modules/
+api/node_modules/
+bondly/node_modules/
+dist/
+bondly/dist/
+.env
+api/.env
+bondly/.env
+*.local
+*.log

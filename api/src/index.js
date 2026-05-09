@@ -18,7 +18,7 @@ const parsePositiveInt = (value, fallback, max = 100) => {
   return Math.min(parsed, max);
 };
 
-const bootstrap = async () => {
+export const createApp = async () => {
   let redisClient = null;
   if (process.env.REDIS_URL) {
     try {
@@ -293,12 +293,18 @@ const bootstrap = async () => {
   return c.json({ success: true, message: "Trip deleted successfully" });
   });
 
-  const port = Number(process.env.PORT || 3001);
-  serve({ fetch: app.fetch, port });
-  console.log(`Bondly API running on http://localhost:${port}`);
+  return app;
 };
 
-bootstrap().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (!process.env.VERCEL) {
+  createApp()
+    .then((app) => {
+      const port = Number(process.env.PORT || 3001);
+      serve({ fetch: app.fetch, port });
+      console.log(`Bondly API running on http://localhost:${port}`);
+    })
+    .catch((error) => {
+      console.error(error);
+      process.exit(1);
+    });
+}

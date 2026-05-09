@@ -9,5 +9,12 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.2",
+    "dotenv": "^17.4.2",
+    "hono": "^4.12.18",
+    "ioredis": "^5.10.1",
+    "pg": "^8.20.0"
   }
 }
