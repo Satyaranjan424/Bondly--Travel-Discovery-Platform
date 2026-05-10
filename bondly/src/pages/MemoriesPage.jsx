@@ -12,8 +12,9 @@ export function MemoriesPage() {
     api
       .getMemories(token, controller.signal)
       .then((response) => {
-        setMemories(response.memories);
-        setStatus(response.memories.length ? "" : "You have not uploaded any memories yet.");
+        const nextMemories = Array.isArray(response.memories) ? response.memories : [];
+        setMemories(nextMemories);
+        setStatus(nextMemories.length ? "" : "You have not uploaded any memories yet.");
       })
       .catch((error) => setStatus(error.message));
 

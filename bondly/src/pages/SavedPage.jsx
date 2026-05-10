@@ -13,8 +13,9 @@ export function SavedPage() {
     api
       .getSavedTrips(token, controller.signal)
       .then((response) => {
-        setTrips(response.trips);
-        setStatus(response.trips.length ? "" : "You have not saved any trips yet.");
+        const nextTrips = Array.isArray(response.trips) ? response.trips : [];
+        setTrips(nextTrips);
+        setStatus(nextTrips.length ? "" : "You have not saved any trips yet.");
       })
       .catch((error) => setStatus(error.message));
 

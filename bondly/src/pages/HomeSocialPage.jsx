@@ -19,10 +19,10 @@ export function HomeSocialPage() {
   const menuRef = useRef(null);
   const cachedFeed = readHomeFeedCache(token);
 
-  const [featuredTrips, setFeaturedTrips] = useState(() => cachedFeed.featuredTrips || []);
-  const [stories, setStories] = useState(() => cachedFeed.stories || []);
-  const [people, setPeople] = useState(() => cachedFeed.people || []);
-  const [activity, setActivity] = useState(() => cachedFeed.activity || []);
+  const [featuredTrips, setFeaturedTrips] = useState(() => asArray(cachedFeed.featuredTrips));
+  const [stories, setStories] = useState(() => asArray(cachedFeed.stories));
+  const [people, setPeople] = useState(() => asArray(cachedFeed.people));
+  const [activity, setActivity] = useState(() => asArray(cachedFeed.activity));
   const [notice, setNotice] = useState("");
 
   const [isLoading, setIsLoading] = useState(() => !hasCachedHomeFeed(cachedFeed));
@@ -36,10 +36,10 @@ export function HomeSocialPage() {
 
   useEffect(() => {
     const nextCachedFeed = readHomeFeedCache(token);
-    setFeaturedTrips(nextCachedFeed.featuredTrips || []);
-    setStories(nextCachedFeed.stories || []);
-    setPeople(nextCachedFeed.people || []);
-    setActivity(nextCachedFeed.activity || []);
+    setFeaturedTrips(asArray(nextCachedFeed.featuredTrips));
+    setStories(asArray(nextCachedFeed.stories));
+    setPeople(asArray(nextCachedFeed.people));
+    setActivity(asArray(nextCachedFeed.activity));
     setIsLoading(!hasCachedHomeFeed(nextCachedFeed));
   }, [token]);
 
@@ -51,14 +51,14 @@ export function HomeSocialPage() {
     api
       .getExploreTrips({ token, signal: controller.signal, limit: 12, view: "feed" })
       .then((tripResult) => {
-        const nextTrips = tripResult.trips;
+        const nextTrips = asArray(tripResult.trips);
         const latestFeed = readHomeFeedCache(token);
         setFeaturedTrips(nextTrips);
         writeHomeFeedCache(token, {
           featuredTrips: nextTrips,
-          stories: latestFeed.stories || cachedSnapshot.stories || [],
-          people: latestFeed.people || cachedSnapshot.people || [],
-          activity: latestFeed.activity || cachedSnapshot.activity || [],
+          stories: asArray(latestFeed.stories).length ? asArray(latestFeed.stories) : asArray(cachedSnapshot.stories),
+          people: asArray(latestFeed.people).length ? asArray(latestFeed.people) : asArray(cachedSnapshot.people),
+          activity: asArray(latestFeed.activity).length ? asArray(latestFeed.activity) : asArray(cachedSnapshot.activity),
         });
       })
       .catch(() => {
@@ -75,19 +75,19 @@ export function HomeSocialPage() {
     ]).then((results) => {
       const [storyResult, userResult, activityResult] = results;
       const nextFeed = {
-        featuredTrips: readHomeFeedCache(token).featuredTrips || cachedSnapshot.featuredTrips || [],
-        stories: cachedSnapshot.stories || [],
-        people: cachedSnapshot.people || [],
-        activity: cachedSnapshot.activity || [],
+        featuredTrips: asArray(readHomeFeedCache(token).featuredTrips).length ? asArray(readHomeFeedCache(token).featuredTrips) : asArray(cachedSnapshot.featuredTrips),
+        stories: asArray(cachedSnapshot.stories),
+        people: asArray(cachedSnapshot.people),
+        activity: asArray(cachedSnapshot.activity),
       };
 
       if (storyResult.status === "fulfilled") {
-        nextFeed.stories = storyResult.value.stories;
+        nextFeed.stories = asArray(storyResult.value.stories);
         setStories(nextFeed.stories);
       }
 
       if (userResult.status === "fulfilled") {
-        nextFeed.people = userResult.value.users.map((item) => ({
+        nextFeed.people = asArray(userResult.value.users).map((item) => ({
           to: `/users/${item.id}`,
           name: item.name,
           detail: item.location || item.bio || "Bondly traveler",
@@ -98,7 +98,7 @@ export function HomeSocialPage() {
       }
 
       if (activityResult.status === "fulfilled") {
-        nextFeed.activity = activityResult.value.activity.map((item) => ({
+        nextFeed.activity = asArray(activityResult.value.activity).map((item) => ({
           id: item.id,
           kind: item.type === "review" ? "rating" : item.type,
           name: item.user?.name || "Traveler",
@@ -531,6 +531,10 @@ function formatRelativeTime(value) {
 
 function buildHomeFeedCacheKey(token) {
   return `bondly-home-feed:${token ? "auth" : "public"}`;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
 }
 
 function readHomeFeedCache(token) {

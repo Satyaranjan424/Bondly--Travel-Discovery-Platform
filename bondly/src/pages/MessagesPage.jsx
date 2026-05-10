@@ -27,10 +27,11 @@ export function MessagesPage() {
     api
       .getInbox(token, controller.signal)
       .then((response) => {
-        setInbox(response.inbox);
+        const nextInbox = Array.isArray(response.inbox) ? response.inbox : [];
+        setInbox(nextInbox);
 
-        if (!selectedUserId && response.inbox[0]?.user?.id) {
-          setSearchParams({ userId: response.inbox[0].user.id }, { replace: true });
+        if (!selectedUserId && nextInbox[0]?.user?.id) {
+          setSearchParams({ userId: nextInbox[0].user.id }, { replace: true });
         }
       })
       .finally(() => {
@@ -52,18 +53,22 @@ export function MessagesPage() {
     api
       .getConversation(token, selectedUserId, controller.signal)
       .then((response) => {
-        setConversation(response);
+        const nextConversation = {
+          ...response,
+          messages: Array.isArray(response.messages) ? response.messages : [],
+        };
+        setConversation(nextConversation);
         setInbox((current) => {
-          const exists = current.some((item) => item.user.id === response.user.id);
+          const exists = current.some((item) => item.user.id === nextConversation.user.id);
           if (exists) {
             return current;
           }
 
           return [
             {
-              user: response.user,
-              lastMessage: response.messages.at(-1)?.body || "",
-              lastMessageAt: response.messages.at(-1)?.createdAt || response.user.createdAt,
+              user: nextConversation.user,
+              lastMessage: nextConversation.messages.at(-1)?.body || "",
+              lastMessageAt: nextConversation.messages.at(-1)?.createdAt || nextConversation.user.createdAt,
               unreadCount: 0,
             },
             ...current,
@@ -102,19 +107,23 @@ export function MessagesPage() {
 
     try {
       const response = await api.sendMessage(token, selectedUserId, { body: messageBody });
-      setConversation(response);
+      const nextConversation = {
+        ...response,
+        messages: Array.isArray(response.messages) ? response.messages : [],
+      };
+      setConversation(nextConversation);
       setInbox((current) => {
         const nextItem = {
-          user: response.user,
-          lastMessage: response.messages.at(-1)?.body || "",
-          lastMessageAt: response.messages.at(-1)?.createdAt || new Date().toISOString(),
+          user: nextConversation.user,
+          lastMessage: nextConversation.messages.at(-1)?.body || "",
+          lastMessageAt: nextConversation.messages.at(-1)?.createdAt || new Date().toISOString(),
           unreadCount: 0,
         };
-        const remaining = current.filter((item) => item.user.id !== response.user.id);
+        const remaining = current.filter((item) => item.user.id !== nextConversation.user.id);
         return [nextItem, ...remaining];
       });
       setMessageBody("");
-      showToast({ type: "message", message: `Your message reached ${response.user.name}.` });
+      showToast({ type: "message", message: `Your message reached ${nextConversation.user.name}.` });
     } finally {
       setIsSending(false);
     }

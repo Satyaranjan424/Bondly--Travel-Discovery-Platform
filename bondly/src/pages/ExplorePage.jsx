@@ -29,8 +29,9 @@ export function ExplorePage() {
     api
       .getExploreTrips({ query: deferredSearch, token, signal: controller.signal, limit: 24, view: "feed" })
       .then((response) => {
-        setTrips(response.trips);
-        setStatus(response.trips.length ? "" : "No public trips matched this search.");
+        const nextTrips = Array.isArray(response.trips) ? response.trips : [];
+        setTrips(nextTrips);
+        setStatus(nextTrips.length ? "" : "No public trips matched this search.");
       })
       .catch((error) => {
         if (error.name !== "AbortError") {
